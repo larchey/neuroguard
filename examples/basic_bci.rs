@@ -3,9 +3,8 @@
 use neuroguard::{
     attestation::{DeviceRegistry, TrustLevel, TrustedDevice},
     policy::{Capability, PolicyEngine},
-    protocol::NeuralChannel,
-    virtual_bci::VirtualBCI,
     verify_frame,
+    virtual_bci::VirtualBCI,
 };
 
 fn main() -> neuroguard::Result<()> {

@@ -14,7 +14,12 @@ pub enum Error {
 
     /// Firmware hash mismatch
     #[error("firmware hash mismatch: expected {expected}, got {actual}")]
-    FirmwareMismatch { expected: String, actual: String },
+    FirmwareMismatch {
+        /// Description of what the registry would have accepted.
+        expected: String,
+        /// Hex-encoded firmware hash actually presented.
+        actual: String,
+    },
 
     /// Decoder not approved
     #[error("decoder not approved: {0}")]
@@ -38,7 +43,10 @@ pub enum Error {
 
     /// Capability denied
     #[error("capability denied: {capability}")]
-    CapabilityDenied { capability: String },
+    CapabilityDenied {
+        /// The capability that was requested but not held.
+        capability: String,
+    },
 
     /// Invalid frame
     #[error("invalid frame: {0}")]

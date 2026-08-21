@@ -230,7 +230,7 @@ impl VirtualBCI {
     fn compute_transformation_hash(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update(b"neural-decoder-v1.0");
-        hasher.update(&self.model_hash);
+        hasher.update(self.model_hash);
         hasher.finalize().into()
     }
 
@@ -308,8 +308,13 @@ impl AttackSimulator {
     }
 
     /// Run an attack scenario and return frames
-    pub fn run_attack(&mut self, attack_type: AttackType, num_frames: usize) -> Result<Vec<NeuralFrame>> {
-        self.device.set_mode(DeviceMode::AttackSimulation(attack_type));
+    pub fn run_attack(
+        &mut self,
+        attack_type: AttackType,
+        num_frames: usize,
+    ) -> Result<Vec<NeuralFrame>> {
+        self.device
+            .set_mode(DeviceMode::AttackSimulation(attack_type));
 
         let mut frames = Vec::new();
         for _ in 0..num_frames {
@@ -374,9 +379,7 @@ mod tests {
 
         let mut simulator = AttackSimulator::new(bci);
 
-        let attack_frames = simulator
-            .run_attack(AttackType::ReplayAttack, 5)
-            .unwrap();
+        let attack_frames = simulator.run_attack(AttackType::ReplayAttack, 5).unwrap();
 
         assert_eq!(attack_frames.len(), 5);
     }

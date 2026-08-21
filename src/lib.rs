@@ -4,7 +4,8 @@
 //! enforcement for neural interfaces. Includes a virtual BCI device for security testing.
 
 #![forbid(unsafe_code)]
-#![warn(missing_docs, rust_2018_idioms)]
+#![deny(missing_docs)]
+#![warn(rust_2018_idioms)]
 
 pub mod attestation;
 pub mod error;

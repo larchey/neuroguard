@@ -205,7 +205,7 @@
       "severity": "medium",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:138",
+        "src/protocol.rs:158",
         "src/attestation.rs:123"
       ],
       "simulated_by": [],
@@ -240,8 +240,8 @@
       "severity": "critical",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:138",
-        "src/protocol.rs:115",
+        "src/protocol.rs:158",
+        "src/protocol.rs:135",
         "src/protocol.rs:33"
       ],
       "simulated_by": [
@@ -273,7 +273,7 @@
       "severity": "high",
       "status": "partial",
       "code_refs": [
-        "src/protocol.rs:138"
+        "src/protocol.rs:158"
       ],
       "simulated_by": [
         "SignalInjection"
@@ -410,7 +410,7 @@
       "status": "open",
       "code_refs": [
         "src/provenance.rs:87",
-        "src/protocol.rs:121"
+        "src/protocol.rs:141"
       ],
       "simulated_by": [
         "ReplayAttack"
@@ -508,7 +508,7 @@
       "severity": "high",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:142",
+        "src/protocol.rs:162",
         "src/attestation.rs:183"
       ],
       "simulated_by": [
@@ -783,7 +783,7 @@
       "severity": "medium",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:115"
+        "src/protocol.rs:135"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -812,7 +812,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:66"
+        "src/protocol.rs:71"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -970,8 +970,8 @@
       "severity": "high",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:138",
-        "src/protocol.rs:115"
+        "src/protocol.rs:158",
+        "src/protocol.rs:135"
       ],
       "simulated_by": [],
       "proposed_scenarios": [
@@ -1151,7 +1151,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:75"
+        "src/protocol.rs:90"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -1273,7 +1273,7 @@
       "status": "open",
       "code_refs": [
         "src/attestation.rs:205",
-        "src/lib.rs:30"
+        "src/lib.rs:31"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],

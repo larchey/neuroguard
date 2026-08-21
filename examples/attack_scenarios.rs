@@ -1,8 +1,8 @@
 //! BCI attack scenario demonstration
 
 use neuroguard::{
-    virtual_bci::{AttackSimulator, AttackType, VirtualBCI},
     verify_frame,
+    virtual_bci::{AttackSimulator, AttackType, VirtualBCI},
 };
 
 fn main() -> neuroguard::Result<()> {

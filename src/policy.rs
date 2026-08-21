@@ -338,8 +338,12 @@ mod tests {
             quality: 0.9,
         };
 
-        assert!(engine.check_channel_access("test-app", &channel_allowed).is_ok());
-        assert!(engine.check_channel_access("test-app", &channel_denied).is_err());
+        assert!(engine
+            .check_channel_access("test-app", &channel_allowed)
+            .is_ok());
+        assert!(engine
+            .check_channel_access("test-app", &channel_denied)
+            .is_err());
     }
 
     #[test]

@@ -316,7 +316,7 @@ measurement, not a claim.
 #### <a id="ng-t006"></a>NG-T006 — Signature transplantation via ambiguous serialisation
 **S/T** · TB-2 · A2 · S3 P1 F2 · L2 → **Medium** · `OPEN`
 
-`signable_data` (`src/protocol.rs:138`) concatenates a variable-length `device_id.id` with
+`signable_data` (`src/protocol.rs:158`) concatenates a variable-length `device_id.id` with
 fixed-width fields and a variable-length sample vector, with no length prefixes and no domain
 separator. Distinct frames can therefore serialise to identical byte strings — e.g. a shift of one
 byte between the tail of `id` and the head of `firmware_hash` — so a signature valid for one
@@ -336,8 +336,8 @@ separation tag (`"neuroguard-frame-v1"`), including `manufacturer`, `model`, seq
 
 `signable_data` covers `device_id.id`, `firmware_hash`, `timestamp`, `transformation_hash`,
 `model_hash`, `previous_commitment`, and `signal_data` — but **not `decoded_output`**
-(`src/protocol.rs:138-155`). `compute_commitment` has the same omission
-(`src/protocol.rs:115-135`), so the provenance chain does not cover it either. The one field that
+(`src/protocol.rs:158-155`). `compute_commitment` has the same omission
+(`src/protocol.rs:135-135`), so the provenance chain does not cover it either. The one field that
 determines what physically happens — `ProstheticControl { joints }`, `VehicleControl { throttle,
 steering, brake }`, `Text` — can be rewritten in flight with the signature and the entire provenance
 chain remaining valid. This is why the `CommandModification` scenario, which injects
@@ -566,7 +566,7 @@ NeuroGuard's most defensible research contribution and the least solved.
 **I** · Provenance store · A7 · S0 P3 F0 · L2 → **Medium** · `OPEN`
 
 `compute_commitment` is an unkeyed SHA-256 over the sample vector and metadata
-(`src/protocol.rs:115`). Published or shared commitments (the point of external anchoring, cf.
+(`src/protocol.rs:135`). Published or shared commitments (the point of external anchoring, cf.
 [NG-T021](#ng-t021)) let anyone holding candidate neural data confirm an exact match — a
 low-entropy-preimage confirmation attack. Short windows, quantised samples, and stereotyped activity
 make candidate enumeration realistic for targeted content.

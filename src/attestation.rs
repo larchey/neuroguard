@@ -100,7 +100,7 @@ impl DeviceRegistry {
     pub fn approve_firmware(&mut self, model: String, firmware_hash: [u8; 32]) {
         self.approved_firmware
             .entry(model)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(firmware_hash);
     }
 
@@ -108,7 +108,7 @@ impl DeviceRegistry {
     pub fn approve_model(&mut self, decoder: String, model_hash: [u8; 32]) {
         self.approved_models
             .entry(decoder)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(model_hash);
     }
 
@@ -121,13 +121,13 @@ impl DeviceRegistry {
 
     /// Verify firmware hash
     pub fn verify_firmware(&self, model: &str, firmware_hash: &[u8; 32]) -> Result<()> {
-        let approved = self
-            .approved_firmware
-            .get(model)
-            .ok_or_else(|| Error::FirmwareMismatch {
-                expected: "unknown model".to_string(),
-                actual: hex::encode(firmware_hash),
-            })?;
+        let approved =
+            self.approved_firmware
+                .get(model)
+                .ok_or_else(|| Error::FirmwareMismatch {
+                    expected: "unknown model".to_string(),
+                    actual: hex::encode(firmware_hash),
+                })?;
 
         if approved.contains(firmware_hash) {
             Ok(())

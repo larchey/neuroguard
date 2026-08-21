@@ -34,7 +34,12 @@ fn catalog_ids(cat: &serde_json::Value) -> Vec<String> {
         .as_array()
         .expect("threats must be an array")
         .iter()
-        .map(|t| t["id"].as_str().expect("every threat needs an id").to_string())
+        .map(|t| {
+            t["id"]
+                .as_str()
+                .expect("every threat needs an id")
+                .to_string()
+        })
         .collect()
 }
 
@@ -145,7 +150,10 @@ fn attack_type_variants() -> Vec<String> {
         .skip(1)
         .map(str::trim)
         .filter(|line| {
-            !line.is_empty() && !line.starts_with("//") && line.ends_with(',') && !line.contains(' ')
+            !line.is_empty()
+                && !line.starts_with("//")
+                && line.ends_with(',')
+                && !line.contains(' ')
         })
         .map(|line| line.trim_end_matches(',').to_string())
         .collect()
@@ -167,7 +175,10 @@ fn every_attack_scenario_maps_to_a_modelled_threat() {
         }
     }
 
-    let unmodelled: Vec<_> = variants.iter().filter(|v| !simulated.contains(*v)).collect();
+    let unmodelled: Vec<_> = variants
+        .iter()
+        .filter(|v| !simulated.contains(*v))
+        .collect();
     assert!(
         unmodelled.is_empty(),
         "AttackType variants with no catalogued threat (add them to docs/threat-catalog.json): {unmodelled:?}"
@@ -212,6 +223,22 @@ fn catalog_code_references_point_at_real_lines() {
                 line >= 1 && line <= total,
                 "{id}: `{reference}` is out of range (file has {total} lines)"
             );
+
+            // A range check alone lets references rot silently: insert lines above a
+            // reference and it slides onto unrelated code while the test stays green.
+            // Pinning exact text would duplicate the source into the catalogue, but we can
+            // reject the shapes a drifted reference tends to land on — blank lines, bare
+            // delimiters, doc comments, and attributes are never worth citing on their own.
+            let target = source.lines().nth(line - 1).unwrap().trim();
+            assert!(
+                !target.is_empty()
+                    && !matches!(target, "}" | "{" | ")" | "};" | ");")
+                    && !target.starts_with("///")
+                    && !target.starts_with("//!")
+                    && !target.starts_with("#["),
+                "{id}: `{reference}` points at `{target}`, which is not citable code — \
+                 the reference has probably drifted"
+            );
         }
     }
 }
@@ -221,7 +248,11 @@ fn catalog_code_references_point_at_real_lines() {
 // ---------------------------------------------------------------------------
 
 fn device(name: &str) -> VirtualBCI {
-    VirtualBCI::new(name.to_string(), "ThreatModelCo".to_string(), "TM-V1".to_string())
+    VirtualBCI::new(
+        name.to_string(),
+        "ThreatModelCo".to_string(),
+        "TM-V1".to_string(),
+    )
 }
 
 /// NG-T010: `signable_data()` omits `decoded_output`, so the command can be rewritten in flight
@@ -230,7 +261,10 @@ fn device(name: &str) -> VirtualBCI {
 fn ng_t010_decoded_output_is_not_covered_by_the_signature() {
     let mut bci = device("t010");
     let mut frame = bci.generate_frame().unwrap();
-    assert!(verify_signature(&frame).is_ok(), "baseline frame must verify");
+    assert!(
+        verify_signature(&frame).is_ok(),
+        "baseline frame must verify"
+    );
 
     // An adversary on the link replaces a cursor movement with a prosthetic command.
     frame.decoded_output = DecodedOutput::ProstheticControl {
@@ -291,7 +325,10 @@ fn ng_t012_registry_checks_are_hardcoded_true() {
     assert!(report.firmware_trusted, "NG-T012: not actually checked");
     assert!(report.decoder_approved, "NG-T005: not actually checked");
     assert!(report.model_valid, "NG-T005: not actually checked");
-    assert!(report.application_authorized, "NG-T050: not actually checked");
+    assert!(
+        report.application_authorized,
+        "NG-T050: not actually checked"
+    );
 }
 
 /// NG-T018: nothing examines `timestamp`, so a ten-minute-old frame is accepted.
@@ -315,10 +352,15 @@ fn ng_t018_stale_frames_are_accepted() {
 #[test]
 fn ng_t002_implausible_signals_are_accepted() {
     let mut simulator = AttackSimulator::new(device("t002"));
-    let frames = simulator.run_attack(AttackType::SignalInjection, 1).unwrap();
+    let frames = simulator
+        .run_attack(AttackType::SignalInjection, 1)
+        .unwrap();
     let frame = &frames[0];
 
-    assert!(frame.signal_data.iter().all(|s| *s > 900.0), "scenario should rail the signal");
+    assert!(
+        frame.signal_data.iter().all(|s| *s > 900.0),
+        "scenario should rail the signal"
+    );
     assert_eq!(
         verify_neural_frame(frame).unwrap().verdict,
         Verdict::Trusted,
@@ -398,15 +440,20 @@ fn ng_t041_rate_limits_have_no_enforcement_api() {
     let policy = PolicyEngine::strict_policy("app".to_string(), vec![1]);
     assert_eq!(policy.rate_limit.max_fps, 30);
 
-    let enforcement_sites: usize = ["src/policy.rs", "src/attestation.rs", "src/protocol.rs", "src/provenance.rs"]
-        .iter()
-        .map(|f| {
-            fs::read_to_string(repo_path(f))
-                .unwrap()
-                .matches("rate_limit")
-                .count()
-        })
-        .sum();
+    let enforcement_sites: usize = [
+        "src/policy.rs",
+        "src/attestation.rs",
+        "src/protocol.rs",
+        "src/provenance.rs",
+    ]
+    .iter()
+    .map(|f| {
+        fs::read_to_string(repo_path(f))
+            .unwrap()
+            .matches("rate_limit")
+            .count()
+    })
+    .sum();
 
     // Every current mention is a declaration or a constructor, never a check.
     assert!(

@@ -57,7 +57,12 @@ pub struct DeviceId {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DecodedOutput {
     /// 2D cursor position
-    CursorPosition { x: f32, y: f32 },
+    CursorPosition {
+        /// Horizontal position, in screen pixels.
+        x: f32,
+        /// Vertical position, in screen pixels.
+        y: f32,
+    },
 
     /// Discrete command
     Command(String),
@@ -66,13 +71,28 @@ pub enum DecodedOutput {
     Text(String),
 
     /// Prosthetic control (joint angles)
-    ProstheticControl { joints: Vec<f32> },
+    ProstheticControl {
+        /// Target angle per joint, in radians, ordered as declared by the prosthesis.
+        joints: Vec<f32>,
+    },
 
     /// Vehicle control
-    VehicleControl { throttle: f32, steering: f32, brake: f32 },
+    VehicleControl {
+        /// Throttle demand, 0.0 (closed) to 1.0 (full).
+        throttle: f32,
+        /// Steering demand, -1.0 (full left) to 1.0 (full right).
+        steering: f32,
+        /// Brake demand, 0.0 (released) to 1.0 (full).
+        brake: f32,
+    },
 
     /// Raw classifier output
-    Classification { class: String, confidence: f32 },
+    Classification {
+        /// Predicted class label.
+        class: String,
+        /// Model confidence in `class`, 0.0 to 1.0.
+        confidence: f32,
+    },
 }
 
 /// Neural channel descriptor
@@ -116,11 +136,11 @@ impl NeuralFrame {
         use sha2::{Digest, Sha256};
 
         let mut hasher = Sha256::new();
-        hasher.update(&self.device_id.id.as_bytes());
-        hasher.update(&self.firmware_hash);
-        hasher.update(&self.timestamp.timestamp().to_le_bytes());
-        hasher.update(&self.transformation_hash);
-        hasher.update(&self.model_hash);
+        hasher.update(self.device_id.id.as_bytes());
+        hasher.update(self.firmware_hash);
+        hasher.update(self.timestamp.timestamp().to_le_bytes());
+        hasher.update(self.transformation_hash);
+        hasher.update(self.model_hash);
 
         if let Some(prev) = &self.previous_commitment {
             hasher.update(prev);
@@ -128,7 +148,7 @@ impl NeuralFrame {
 
         // Hash signal data
         for &sample in &self.signal_data {
-            hasher.update(&sample.to_le_bytes());
+            hasher.update(sample.to_le_bytes());
         }
 
         hasher.finalize().into()
