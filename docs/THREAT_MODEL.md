@@ -4,7 +4,8 @@
 **Date:** 2026-08-21
 **Applies to:** NeuroGuard v0.0.1 (`src/{attestation,policy,protocol,provenance,virtual_bci}.rs`)
 **Method:** STRIDE per-element, extended with neural-interface-specific vectors
-**Status:** Research draft. Findings marked `OPEN` are present in the v0.0.1 code as shipped.
+**Status:** Research draft. Findings marked `OPEN` are present in the v0.0.1 code as shipped;
+findings marked `CLOSED` have been fixed in the current tree and carry a named regression test.
 
 ---
 
@@ -30,11 +31,18 @@ Testing attack: DataExfiltration ........ Verdict: Trusted   ⚠️  Attack bypa
 means the README's "Verification Flow" (six ✓ checks) describes an intended design, not the
 implemented one. This document is the design that closes that gap.
 
-The five highest-severity findings, all `OPEN`:
+That figure is a weaker signal than it looks, and it will not move until the simulator itself is
+fixed. `VirtualBCI::apply_attack` mutates the frame *before* signing it, so every attack frame is
+validly self-signed by the device — the suite models a compromised device and cannot express an
+on-path attacker at all. Closing NG-T010 therefore left the count at 0/8 even though tampering in
+transit is now detected: no scenario performs tampering in transit. See
+[§8](#8-validation-tests-simulation-and-fuzzing).
+
+The five highest-severity findings as first assessed:
 
 | ID | Finding | Why it matters |
 |---|---|---|
-| [NG-T010](#ng-t010) | `NeuralFrame::signable_data()` does not cover `decoded_output` | The *command* — cursor, prosthetic joint angles, vehicle throttle — is unauthenticated. Anyone on the path can rewrite the intent while the signature still verifies. Highest safety impact in the model. |
+| [NG-T010](#ng-t010) `CLOSED` | `NeuralFrame::signable_data()` did not cover `decoded_output` | The *command* — cursor, prosthetic joint angles, vehicle throttle — was unauthenticated. Anyone on the path could rewrite the intent while the signature still verified. Highest safety impact in the model. Now covered by a canonical, length-prefixed, domain-separated preimage. |
 | [NG-T001](#ng-t001) | Signature is checked against the public key carried *inside the frame* | Self-signed frames verify. There is no binding to a registry, so "device authenticated" means "the sender owns a key", not "the sender is your implant". |
 | [NG-T016](#ng-t016) | No stimulation (write-path) type exists at all | `DecodedOutput` models brain→app only. Closed-loop DBS/sensory feedback — where tampering causes direct physical harm — is outside the protocol's expressive range. |
 | [NG-T040](#ng-t040) | No latency/liveness contract on the closed loop | Selective delay/drop of frames in a closed-loop controller is a *safety* attack (oscillation, runaway prosthetic), not just an availability one. Rate limits are declared in `RateLimit` but never enforced anywhere. |
@@ -250,7 +258,9 @@ Every element scores `●` on Elevation except the pure-hardware ones — a dire
 Format: **STRIDE** · **element** · **attacker profile** · **impact (S/P/F)** · **likelihood** →
 **severity** · **status**. `OPEN` = exploitable in v0.0.1 as shipped. `PARTIAL` = a control exists
 but is incomplete or unenforced. `DESIGN` = the threat is real but the corresponding subsystem does
-not exist yet, so there is nothing to fix — there is something to build.
+not exist yet, so there is nothing to fix — there is something to build. `CLOSED` = fixed in the
+current tree, with a named regression test asserting the fixed behaviour; the entry is kept rather
+than deleted so the record of what was wrong survives.
 
 ### 4.1 Spoofing
 
@@ -314,9 +324,18 @@ written). Medium term, measure the loaded model at load time inside an enclave/T
 measurement, not a claim.
 
 #### <a id="ng-t006"></a>NG-T006 — Signature transplantation via ambiguous serialisation
-**S/T** · TB-2 · A2 · S3 P1 F2 · L2 → **Medium** · `OPEN`
+**S/T** · TB-2 · A2 · S3 P1 F2 · L2 → **Medium** · `CLOSED`
 
-`signable_data` (`src/protocol.rs:158`) concatenates a variable-length `device_id.id` with
+> **Resolved.** `signable_data` now emits a canonical encoding: a domain-separation tag followed
+> by every field as a 64-bit length prefix plus its contents, covering `manufacturer`, `model`,
+> `sequence`, `nonce`, and `decoded_output`. Field extents are explicit, so no shift of content
+> between adjacent variable-length fields yields the same preimage, and the cross-model confusion
+> path is closed because `model` is now authenticated. Signature and commitment preimages carry
+> different tags, so neither can be reinterpreted as the other. Regression tests:
+> `ng_t006_field_boundaries_are_unambiguous` and
+> `ng_t006_signature_and_commitment_are_domain_separated`. The text below records the v0.0.1 defect.
+
+`signable_data` (`src/protocol.rs:304`) concatenated a variable-length `device_id.id` with
 fixed-width fields and a variable-length sample vector, with no length prefixes and no domain
 separator. Distinct frames can therefore serialise to identical byte strings — e.g. a shift of one
 byte between the tail of `id` and the head of `firmware_hash` — so a signature valid for one
@@ -332,16 +351,27 @@ separation tag (`"neuroguard-frame-v1"`), including `manufacturer`, `model`, seq
 ### 4.2 Tampering
 
 #### <a id="ng-t010"></a>NG-T010 — Decoded output is not covered by the signature
-**T** · TB-2, E3, E4 · A2, A3 · S4 P0 F4 · L4 → **Critical** · `OPEN`
+**T** · TB-2, E3, E4 · A2, A3 · S4 P0 F4 · L4 → **Critical** · `CLOSED`
 
-`signable_data` covers `device_id.id`, `firmware_hash`, `timestamp`, `transformation_hash`,
-`model_hash`, `previous_commitment`, and `signal_data` — but **not `decoded_output`**
-(`src/protocol.rs:158-155`). `compute_commitment` has the same omission
-(`src/protocol.rs:135-135`), so the provenance chain does not cover it either. The one field that
-determines what physically happens — `ProstheticControl { joints }`, `VehicleControl { throttle,
-steering, brake }`, `Text` — can be rewritten in flight with the signature and the entire provenance
-chain remaining valid. This is why the `CommandModification` scenario, which injects
-`"MALICIOUS_COMMAND"`, verifies as `Trusted`.
+> **Resolved.** Both `signable_data` (`src/protocol.rs:304-308`) and `compute_commitment`
+> (`src/protocol.rs:288-297`) now cover `decoded_output`, encoded with an explicitly assigned
+> per-variant discriminant so reordering the enum cannot silently change what a signature covers.
+> Rewriting the command in flight invalidates the signature and moves the frame's position in the
+> provenance chain. Regression tests: `ng_t010_decoded_output_is_covered_by_the_signature` and
+> `ng_t010_commitment_covers_decoded_output`.
+>
+> **Residual:** this binds the decoder's output to the *device's* key. Where decoding happens
+> off-device, the decoder is still not an independent signing principal, so a compromised decoder
+> can emit whatever output it likes and the device will sign it. That half of the mitigation below
+> remains future work, tracked under [NG-T005](#ng-t005). The text below records the v0.0.1 defect.
+
+`signable_data` covered `device_id.id`, `firmware_hash`, `timestamp`, `transformation_hash`,
+`model_hash`, `previous_commitment`, and `signal_data` — but **not `decoded_output`**.
+`compute_commitment` had the same omission, so the provenance chain did not cover it either. The
+one field that determines what physically happens — `ProstheticControl { joints }`,
+`VehicleControl { throttle, steering, brake }`, `Text` — could be rewritten in flight with the
+signature and the entire provenance chain remaining valid. This is why the `CommandModification`
+scenario, which injects `"MALICIOUS_COMMAND"`, verified as `Trusted`.
 
 *Mitigation:* include `decoded_output` in both `signable_data()` and `compute_commitment()`. Where
 decoding happens off-device, the decoder must be a distinct signing principal, producing a second
@@ -491,7 +521,7 @@ exactly which policy version authorised a given command.
 
 `Capability::ReadRawSignal` and `RecordData` are defined but never checked, and every
 `NeuralFrame` carries `signal_data` regardless of the recipient's capabilities
-(`src/protocol.rs:30`). An application that only needs a cursor position receives the underlying
+(`src/protocol.rs:42`). An application that only needs a cursor position receives the underlying
 neural samples in the same struct. This is the BCI equivalent of shipping the raw camera feed to an
 app that asked for a QR code — and unlike a camera feed, the user cannot change their brain after a
 leak. The `DataExfiltration` scenario is undetected because there is nothing to detect: the data is
@@ -566,7 +596,7 @@ NeuroGuard's most defensible research contribution and the least solved.
 **I** · Provenance store · A7 · S0 P3 F0 · L2 → **Medium** · `OPEN`
 
 `compute_commitment` is an unkeyed SHA-256 over the sample vector and metadata
-(`src/protocol.rs:135`). Published or shared commitments (the point of external anchoring, cf.
+(`src/protocol.rs:288`). Published or shared commitments (the point of external anchoring, cf.
 [NG-T021](#ng-t021)) let anyone holding candidate neural data confirm an exact match — a
 low-entropy-preimage confirmation attack. Short windows, quantised samples, and stereotyped activity
 make candidate enumeration realistic for targeted content.

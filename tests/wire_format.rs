@@ -33,6 +33,8 @@ fn signed_frame(decoded_output: DecodedOutput, signal_data: Vec<f32>) -> NeuralF
         transformation_hash: [0x22; 32],
         model_hash: [0x33; 32],
         previous_commitment: Some([0x44; 32]),
+        sequence: 42,
+        nonce: [0x55; 16],
         signal_data,
         decoded_output,
         signature: [0u8; 64],
@@ -188,6 +190,52 @@ fn f32_signal_samples_survive_exactly() {
         );
     }
     verify_signature(&decoded).expect("frame with awkward samples must still verify");
+}
+
+#[test]
+fn every_authenticated_field_reaches_the_preimage() {
+    // A field added to NeuralFrame but forgotten in write_body is silently unauthenticated —
+    // exactly the NG-T010 defect. Mutating each field must perturb both preimages.
+    let base = signed_frame(DecodedOutput::Command("go".to_string()), vec![0.5, 0.25]);
+    let reference = base.signable_data();
+    let reference_commitment = base.compute_commitment();
+
+    /// A named single-field edit to a frame.
+    type Mutation = (&'static str, fn(&mut NeuralFrame));
+
+    let mutations: Vec<Mutation> = vec![
+        ("device_id.id", |f| f.device_id.id.push('x')),
+        ("manufacturer", |f| f.device_id.manufacturer.push('x')),
+        ("model", |f| f.device_id.model.push('x')),
+        ("firmware_hash", |f| f.firmware_hash[0] ^= 1),
+        ("timestamp", |f| {
+            f.timestamp += chrono::Duration::microseconds(1)
+        }),
+        ("sequence", |f| f.sequence += 1),
+        ("nonce", |f| f.nonce[0] ^= 1),
+        ("transformation_hash", |f| f.transformation_hash[0] ^= 1),
+        ("model_hash", |f| f.model_hash[0] ^= 1),
+        ("previous_commitment", |f| f.previous_commitment = None),
+        ("signal_data", |f| f.signal_data.push(0.125)),
+        ("decoded_output", |f| {
+            f.decoded_output = DecodedOutput::Command("stop".to_string())
+        }),
+    ];
+
+    for (field, mutate) in mutations {
+        let mut altered = base.clone();
+        mutate(&mut altered);
+        assert_ne!(
+            reference,
+            altered.signable_data(),
+            "{field} is not covered by the signature preimage"
+        );
+        assert_ne!(
+            reference_commitment,
+            altered.compute_commitment(),
+            "{field} is not covered by the commitment"
+        );
+    }
 }
 
 #[test]

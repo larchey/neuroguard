@@ -14,7 +14,8 @@
   "status_values": {
     "open": "exploitable in v0.0.1 as shipped",
     "partial": "control exists in code but is unreachable or incomplete",
-    "design": "the subsystem does not exist yet; this is a design requirement"
+    "design": "the subsystem does not exist yet; this is a design requirement",
+    "closed": "fixed in the current tree; the characterisation test now asserts the fixed behaviour"
   },
   "threats": [
     {
@@ -203,9 +204,9 @@
       },
       "likelihood": 2,
       "severity": "medium",
-      "status": "open",
+      "status": "closed",
       "code_refs": [
-        "src/protocol.rs:158",
+        "src/protocol.rs:304",
         "src/attestation.rs:123"
       ],
       "simulated_by": [],
@@ -214,7 +215,8 @@
         "CrossModelConfusion"
       ],
       "roadmap": "v0.1.0",
-      "mitigation": "Canonical length-prefixed encoding of the entire frame with a domain-separation tag, including manufacturer, model, sequence, and decoded_output."
+      "mitigation": "Canonical length-prefixed encoding of the entire frame with a domain-separation tag, including manufacturer, model, sequence, and decoded_output.",
+      "resolution": "Canonical length-prefixed encoding with a domain-separation tag landed in signable_data()/compute_commitment(); manufacturer, model, sequence, nonce, and decoded_output are all covered."
     },
     {
       "id": "NG-T010",
@@ -238,18 +240,19 @@
       },
       "likelihood": 4,
       "severity": "critical",
-      "status": "open",
+      "status": "closed",
       "code_refs": [
-        "src/protocol.rs:158",
-        "src/protocol.rs:135",
-        "src/protocol.rs:33"
+        "src/protocol.rs:304",
+        "src/protocol.rs:288",
+        "src/protocol.rs:45"
       ],
       "simulated_by": [
         "CommandModification"
       ],
       "proposed_scenarios": [],
       "roadmap": "v0.1.0",
-      "mitigation": "Include decoded_output in signable_data() and compute_commitment(); make an off-device decoder an independent signing principal over (input commitment, output)."
+      "mitigation": "Include decoded_output in signable_data() and compute_commitment(); make an off-device decoder an independent signing principal over (input commitment, output).",
+      "resolution": "signable_data() and compute_commitment() now cover decoded_output via a stable per-variant discriminant. An off-device decoder as an independent signing principal remains future work (see NG-T005)."
     },
     {
       "id": "NG-T011",
@@ -273,7 +276,7 @@
       "severity": "high",
       "status": "partial",
       "code_refs": [
-        "src/protocol.rs:158"
+        "src/protocol.rs:304"
       ],
       "simulated_by": [
         "SignalInjection"
@@ -410,7 +413,7 @@
       "status": "open",
       "code_refs": [
         "src/provenance.rs:87",
-        "src/protocol.rs:141"
+        "src/protocol.rs:274"
       ],
       "simulated_by": [
         "ReplayAttack"
@@ -508,7 +511,7 @@
       "severity": "high",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:162",
+        "src/protocol.rs:274",
         "src/attestation.rs:183"
       ],
       "simulated_by": [
@@ -629,7 +632,7 @@
       "severity": "high",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:30",
+        "src/protocol.rs:42",
         "src/policy.rs:40"
       ],
       "simulated_by": [
@@ -661,7 +664,7 @@
       "severity": "medium",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:30"
+        "src/protocol.rs:42"
       ],
       "simulated_by": [],
       "proposed_scenarios": [
@@ -783,7 +786,7 @@
       "severity": "medium",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:135"
+        "src/protocol.rs:288"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -812,7 +815,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:71"
+        "src/protocol.rs:83"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -970,8 +973,8 @@
       "severity": "high",
       "status": "open",
       "code_refs": [
-        "src/protocol.rs:158",
-        "src/protocol.rs:135"
+        "src/protocol.rs:304",
+        "src/protocol.rs:288"
       ],
       "simulated_by": [],
       "proposed_scenarios": [
@@ -1151,7 +1154,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:90"
+        "src/protocol.rs:102"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],

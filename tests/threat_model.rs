@@ -18,6 +18,7 @@ use neuroguard::policy::{Capability, PolicyEngine};
 use neuroguard::protocol::DecodedOutput;
 use neuroguard::provenance::ProvenanceChain;
 use neuroguard::virtual_bci::{AttackSimulator, AttackType, VirtualBCI};
+use sha2::{Digest, Sha256};
 
 fn repo_path(rel: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(rel)
@@ -95,8 +96,19 @@ fn every_catalog_threat_has_required_fields() {
             "{id} has unknown severity `{severity}`"
         );
         let status = threat["status"].as_str().unwrap();
+
+        // A closed threat must say what closed it, so the catalogue records the fix rather
+        // than quietly dropping the finding.
+        if status == "closed" {
+            let resolution = threat["resolution"].as_str();
+            assert!(
+                resolution.is_some_and(|r| r.trim().len() > 40),
+                "{id} is closed but has no substantive `resolution`"
+            );
+        }
+
         assert!(
-            ["open", "partial", "design"].contains(&status),
+            ["open", "partial", "design", "closed"].contains(&status),
             "{id} has unknown status `{status}`"
         );
         for dim in ["s", "p", "f"] {
@@ -255,10 +267,10 @@ fn device(name: &str) -> VirtualBCI {
     )
 }
 
-/// NG-T010: `signable_data()` omits `decoded_output`, so the command can be rewritten in flight
-/// and the device signature still verifies.
+/// NG-T010 (CLOSED): `signable_data()` covers `decoded_output`, so rewriting the command in
+/// flight invalidates the device signature.
 #[test]
-fn ng_t010_decoded_output_is_not_covered_by_the_signature() {
+fn ng_t010_decoded_output_is_covered_by_the_signature() {
     let mut bci = device("t010");
     let mut frame = bci.generate_frame().unwrap();
     assert!(
@@ -272,20 +284,20 @@ fn ng_t010_decoded_output_is_not_covered_by_the_signature() {
     };
 
     assert!(
-        verify_signature(&frame).is_ok(),
-        "NG-T010 FIXED: decoded_output is now signed — update the catalogue status and this test"
+        verify_signature(&frame).is_err(),
+        "NG-T010 REGRESSED: a rewritten command must break the signature"
     );
     assert_eq!(
         verify_neural_frame(&frame).unwrap().verdict,
-        Verdict::Trusted,
-        "NG-T010: tampered command is still trusted end to end"
+        Verdict::Rejected,
+        "NG-T010 REGRESSED: a tampered command must not be trusted end to end"
     );
 }
 
-/// NG-T010 (second half): the provenance commitment omits `decoded_output` too, so the tampered
-/// frame occupies the same position in the chain as the original.
+/// NG-T010 (CLOSED, second half): the provenance commitment covers `decoded_output`, so a
+/// tampered frame no longer occupies the same position in the chain as the original.
 #[test]
-fn ng_t010_commitment_ignores_decoded_output() {
+fn ng_t010_commitment_covers_decoded_output() {
     let mut bci = device("t010b");
     let frame = bci.generate_frame().unwrap();
     let original = frame.compute_commitment();
@@ -293,10 +305,52 @@ fn ng_t010_commitment_ignores_decoded_output() {
     let mut tampered = frame.clone();
     tampered.decoded_output = DecodedOutput::Command("MALICIOUS".to_string());
 
-    assert_eq!(
+    assert_ne!(
         original,
         tampered.compute_commitment(),
-        "NG-T010 FIXED: commitments now cover decoded_output — update the catalogue and this test"
+        "NG-T010 REGRESSED: commitments must cover decoded_output"
+    );
+}
+
+/// NG-T006 (CLOSED): the preimage is length-prefixed, so content cannot be shifted between
+/// adjacent variable-length fields to produce the same bytes.
+///
+/// Under the old raw concatenation, a device id of `"ab"` followed by manufacturer `"cd"`
+/// encoded identically to `"a"` followed by `"bcd"`, and one signature covered both readings.
+#[test]
+fn ng_t006_field_boundaries_are_unambiguous() {
+    let mut bci = device("t006");
+    let base = bci.generate_frame().unwrap();
+
+    let mut left = base.clone();
+    left.device_id.id = "ab".to_string();
+    left.device_id.manufacturer = "cd".to_string();
+
+    let mut right = base.clone();
+    right.device_id.id = "a".to_string();
+    right.device_id.manufacturer = "bcd".to_string();
+
+    assert_ne!(
+        left.signable_data(),
+        right.signable_data(),
+        "NG-T006 REGRESSED: a field-boundary shift produced an identical preimage"
+    );
+}
+
+/// NG-T006 (CLOSED, second half): signature and commitment preimages live in separate
+/// namespaces, so bytes built for one purpose cannot be reinterpreted as the other.
+#[test]
+fn ng_t006_signature_and_commitment_are_domain_separated() {
+    let mut bci = device("t006b");
+    let frame = bci.generate_frame().unwrap();
+
+    let signable = frame.signable_data();
+    let commitment = frame.compute_commitment();
+
+    assert_ne!(
+        Sha256::digest(&signable)[..],
+        commitment[..],
+        "NG-T006 REGRESSED: hashing the signature preimage reproduced the commitment"
     );
 }
 

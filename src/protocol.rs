@@ -26,6 +26,18 @@ pub struct NeuralFrame {
     /// Previous frame commitment (hash chain)
     pub previous_commitment: Option<[u8; 32]>,
 
+    /// Monotonic per-device frame counter.
+    ///
+    /// Carried in the signed preimage so a receiver can detect replay and reordering
+    /// independently of the clock. Enforcement of monotonicity is not yet implemented.
+    pub sequence: u64,
+
+    /// Per-frame random nonce.
+    ///
+    /// Ensures two frames with identical content still produce distinct signatures and
+    /// commitments, so the commitment cannot be used to confirm a guessed frame body.
+    pub nonce: [u8; 16],
+
     /// Raw neural signal data
     pub signal_data: Vec<f32>,
 
@@ -130,48 +142,169 @@ pub enum ChannelType {
     Other,
 }
 
+/// Domain-separation tag for the signature preimage.
+///
+/// Distinct tags keep the two preimages in disjoint namespaces: bytes built to be signed can
+/// never be reinterpreted as bytes built to be committed, or vice versa.
+const DOMAIN_SIGNATURE: &[u8] = b"NeuroGuard-v1-frame-signature";
+
+/// Domain-separation tag for the commitment preimage.
+const DOMAIN_COMMITMENT: &[u8] = b"NeuroGuard-v1-frame-commitment";
+
+/// Builds an unambiguous byte encoding of a frame.
+///
+/// Every field is written as a 64-bit little-endian byte length followed by its contents. The
+/// previous encoding concatenated fields raw, which is ambiguous whenever two adjacent fields
+/// are variable-length: moving a byte from the end of `device_id.id` to the start of the next
+/// field produced identical bytes, so one signature covered both readings. Length prefixes make
+/// each field's extent explicit, so distinct frames always produce distinct preimages.
+struct CanonicalWriter {
+    buf: Vec<u8>,
+}
+
+impl CanonicalWriter {
+    fn new(domain: &[u8]) -> Self {
+        let mut writer = Self { buf: Vec::new() };
+        writer.field(domain);
+        writer
+    }
+
+    /// Write a length-prefixed byte string.
+    fn field(&mut self, bytes: &[u8]) {
+        self.buf
+            .extend_from_slice(&(bytes.len() as u64).to_le_bytes());
+        self.buf.extend_from_slice(bytes);
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.field(&value.to_le_bytes());
+    }
+
+    fn i64(&mut self, value: i64) {
+        self.field(&value.to_le_bytes());
+    }
+
+    fn f32(&mut self, value: f32) {
+        // Exact IEEE-754 bits, not a decimal rendering: the preimage must be reproducible
+        // bit-for-bit on both sides of the link.
+        self.field(&value.to_le_bytes());
+    }
+
+    /// Write a slice of samples as one length-prefixed run, avoiding a per-sample prefix and
+    /// the intermediate copy a `field` call would need.
+    fn samples(&mut self, samples: &[f32]) {
+        let byte_len = std::mem::size_of_val(samples) as u64;
+        self.buf.extend_from_slice(&byte_len.to_le_bytes());
+        for sample in samples {
+            self.buf.extend_from_slice(&sample.to_le_bytes());
+        }
+    }
+
+    /// Write an optional hash with an explicit presence byte, so `None` and a zero hash are
+    /// never the same bytes.
+    fn optional_hash(&mut self, hash: Option<&[u8; 32]>) {
+        match hash {
+            Some(value) => {
+                self.buf.push(1);
+                self.field(value);
+            }
+            None => self.buf.push(0),
+        }
+    }
+
+    fn into_bytes(self) -> Vec<u8> {
+        self.buf
+    }
+}
+
+impl DecodedOutput {
+    /// Stable wire discriminant.
+    ///
+    /// Assigned explicitly rather than derived from declaration order, so reordering or
+    /// inserting a variant cannot silently change what an existing signature covers.
+    fn tag(&self) -> u8 {
+        match self {
+            DecodedOutput::CursorPosition { .. } => 1,
+            DecodedOutput::Command(_) => 2,
+            DecodedOutput::Text(_) => 3,
+            DecodedOutput::ProstheticControl { .. } => 4,
+            DecodedOutput::VehicleControl { .. } => 5,
+            DecodedOutput::Classification { .. } => 6,
+        }
+    }
+
+    fn write_canonical(&self, writer: &mut CanonicalWriter) {
+        writer.field(&[self.tag()]);
+        match self {
+            DecodedOutput::CursorPosition { x, y } => {
+                writer.f32(*x);
+                writer.f32(*y);
+            }
+            DecodedOutput::Command(command) => writer.field(command.as_bytes()),
+            DecodedOutput::Text(text) => writer.field(text.as_bytes()),
+            DecodedOutput::ProstheticControl { joints } => writer.samples(joints),
+            DecodedOutput::VehicleControl {
+                throttle,
+                steering,
+                brake,
+            } => {
+                writer.f32(*throttle);
+                writer.f32(*steering);
+                writer.f32(*brake);
+            }
+            DecodedOutput::Classification { class, confidence } => {
+                writer.field(class.as_bytes());
+                writer.f32(*confidence);
+            }
+        }
+    }
+}
+
 impl NeuralFrame {
-    /// Compute the commitment hash for this frame (for hash chaining)
+    /// Write every authenticated field of the frame in a fixed order.
+    ///
+    /// `device_id.public_key` is deliberately absent: it is self-asserted (NG-T001), so binding
+    /// it would not establish identity — an attacker who re-signs also swaps the key. It leaves
+    /// the wire format entirely once keys are resolved from the registry.
+    fn write_body(&self, writer: &mut CanonicalWriter) {
+        writer.field(self.device_id.id.as_bytes());
+        writer.field(self.device_id.manufacturer.as_bytes());
+        writer.field(self.device_id.model.as_bytes());
+        writer.field(&self.firmware_hash);
+        writer.i64(self.timestamp.timestamp_micros());
+        writer.u64(self.sequence);
+        writer.field(&self.nonce);
+        writer.field(&self.transformation_hash);
+        writer.field(&self.model_hash);
+        writer.optional_hash(self.previous_commitment.as_ref());
+        writer.samples(&self.signal_data);
+        self.decoded_output.write_canonical(writer);
+    }
+
+    /// Compute the commitment hash for this frame (for hash chaining).
+    ///
+    /// Covers `decoded_output`, so a tampered command no longer occupies the same position in
+    /// the provenance chain as the original.
     pub fn compute_commitment(&self) -> [u8; 32] {
         use sha2::{Digest, Sha256};
 
+        let mut writer = CanonicalWriter::new(DOMAIN_COMMITMENT);
+        self.write_body(&mut writer);
+
         let mut hasher = Sha256::new();
-        hasher.update(self.device_id.id.as_bytes());
-        hasher.update(self.firmware_hash);
-        hasher.update(self.timestamp.timestamp().to_le_bytes());
-        hasher.update(self.transformation_hash);
-        hasher.update(self.model_hash);
-
-        if let Some(prev) = &self.previous_commitment {
-            hasher.update(prev);
-        }
-
-        // Hash signal data
-        for &sample in &self.signal_data {
-            hasher.update(sample.to_le_bytes());
-        }
-
+        hasher.update(writer.into_bytes());
         hasher.finalize().into()
     }
 
-    /// Get the data that should be signed by the device
+    /// Get the data that should be signed by the device.
+    ///
+    /// Covers the decoded output and the full device identity, so the actuation command — a
+    /// cursor position, prosthetic joint angles, a vehicle throttle demand — is authenticated
+    /// rather than merely carried alongside authenticated data.
     pub fn signable_data(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        data.extend_from_slice(self.device_id.id.as_bytes());
-        data.extend_from_slice(&self.firmware_hash);
-        data.extend_from_slice(&self.timestamp.timestamp().to_le_bytes());
-        data.extend_from_slice(&self.transformation_hash);
-        data.extend_from_slice(&self.model_hash);
-
-        if let Some(prev) = &self.previous_commitment {
-            data.extend_from_slice(prev);
-        }
-
-        for &sample in &self.signal_data {
-            data.extend_from_slice(&sample.to_le_bytes());
-        }
-
-        data
+        let mut writer = CanonicalWriter::new(DOMAIN_SIGNATURE);
+        self.write_body(&mut writer);
+        writer.into_bytes()
     }
 }
 
@@ -193,6 +326,8 @@ mod tests {
             transformation_hash: [2u8; 32],
             model_hash: [3u8; 32],
             previous_commitment: None,
+            sequence: 0,
+            nonce: [4u8; 16],
             signal_data: vec![0.1, 0.2, 0.3],
             decoded_output: DecodedOutput::CursorPosition { x: 100.0, y: 200.0 },
             signature: [0u8; 64],

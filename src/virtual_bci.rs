@@ -24,6 +24,9 @@ pub struct VirtualBCI {
     /// Previous frame commitment (for chain)
     previous_commitment: Option<[u8; 32]>,
 
+    /// Monotonic frame counter, emitted in each frame's signed preimage
+    sequence: u64,
+
     /// Available neural channels
     channels: Vec<NeuralChannel>,
 
@@ -125,6 +128,7 @@ impl VirtualBCI {
             firmware_hash,
             model_hash,
             previous_commitment: None,
+            sequence: 0,
             channels,
             mode: DeviceMode::Normal,
         }
@@ -158,6 +162,13 @@ impl VirtualBCI {
         // Compute transformation hash
         let transformation_hash = self.compute_transformation_hash();
 
+        // Fresh nonce per frame, so identical content still yields distinct commitments
+        let mut nonce = [0u8; 16];
+        rand::thread_rng().fill(&mut nonce);
+
+        let sequence = self.sequence;
+        self.sequence += 1;
+
         // Create the frame
         let mut frame = NeuralFrame {
             device_id: self.device_id.clone(),
@@ -166,6 +177,8 @@ impl VirtualBCI {
             transformation_hash,
             model_hash: self.model_hash,
             previous_commitment: self.previous_commitment,
+            sequence,
+            nonce,
             signal_data,
             decoded_output,
             signature: [0u8; 64], // Placeholder

@@ -241,6 +241,8 @@ mod tests {
             transformation_hash: [2u8; 32],
             model_hash: [3u8; 32],
             previous_commitment: None,
+            sequence: 0,
+            nonce: [4u8; 16],
             signal_data: vec![0.1],
             decoded_output: DecodedOutput::CursorPosition { x: 0.0, y: 0.0 },
             signature: [0u8; 64],
