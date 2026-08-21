@@ -1,0 +1,1308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "document": "docs/THREAT_MODEL.md",
+  "catalog_version": "1.0",
+  "date": "2026-08-21",
+  "applies_to": "neuroguard 0.0.1",
+  "method": "STRIDE per-element, extended with BCI-specific vectors",
+  "impact_dimensions": {
+    "s": "safety: physical harm to the user (0-4)",
+    "p": "privacy: disclosure of neural or inferred mental content (0-4)",
+    "f": "function: loss of assistive capability (0-4)"
+  },
+  "likelihood_scale": "1 = nation-state capability plus physical access; 5 = reachable by any application on the host today",
+  "status_values": {
+    "open": "exploitable in v0.0.1 as shipped",
+    "partial": "control exists in code but is unreachable or incomplete",
+    "design": "the subsystem does not exist yet; this is a design requirement"
+  },
+  "threats": [
+    {
+      "id": "NG-T001",
+      "title": "Implant impersonation via self-asserted public key",
+      "stride": [
+        "S"
+      ],
+      "elements": [
+        "E2",
+        "TB-2"
+      ],
+      "attackers": [
+        "A2",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 3,
+        "f": 3
+      },
+      "likelihood": 4,
+      "severity": "critical",
+      "status": "open",
+      "code_refs": [
+        "src/attestation.rs:167",
+        "src/attestation.rs:168"
+      ],
+      "simulated_by": [
+        "DeviceImpersonation"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Resolve the verifying key from DeviceRegistry by device id; remove public_key from the wire format; bind identity to a hardware root of trust."
+    },
+    {
+      "id": "NG-T002",
+      "title": "Neural signal spoofing below the signing boundary",
+      "stride": [
+        "S",
+        "T"
+      ],
+      "elements": [
+        "E1",
+        "E2",
+        "TB-1"
+      ],
+      "attackers": [
+        "A4",
+        "A6",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 2,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [
+        "src/virtual_bci.rs:181"
+      ],
+      "simulated_by": [
+        "SignalInjection"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Signal-domain plausibility gate (amplitude, spectrum, inter-channel covariance, refractory stats, artefact liveness) plus cross-modal corroboration for irreversible actions."
+    },
+    {
+      "id": "NG-T003",
+      "title": "Application identity spoofing",
+      "stride": [
+        "S"
+      ],
+      "elements": [
+        "E5",
+        "TB-4"
+      ],
+      "attackers": [
+        "A1",
+        "A3"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 4,
+        "f": 2
+      },
+      "likelihood": 5,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:21"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "BlacklistedAppFlow"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Establish app identity out of band (OS peer credentials, code signature, attested token); key policy on the verified identity."
+    },
+    {
+      "id": "NG-T004",
+      "title": "Admin/clinician plane spoofing",
+      "stride": [
+        "S",
+        "E"
+      ],
+      "elements": [
+        "E9",
+        "TB-6"
+      ],
+      "attackers": [
+        "A5",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 4,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "critical",
+      "status": "design",
+      "code_refs": [
+        "src/attestation.rs:94",
+        "src/attestation.rs:100",
+        "src/policy.rs:146"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Signed administrative operations verified against a pinned trust anchor; two-person rule for stimulation limits; append-only audit."
+    },
+    {
+      "id": "NG-T005",
+      "title": "Decoder/transform impersonation",
+      "stride": [
+        "S",
+        "T"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A3",
+        "A4"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 2,
+        "f": 3
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "partial",
+      "code_refs": [
+        "src/attestation.rs:143",
+        "src/protocol.rs:24"
+      ],
+      "simulated_by": [
+        "MaliciousDecoder"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Call verify_model in the pipeline; longer term measure the loaded model inside a TEE and report a measurement rather than a claim."
+    },
+    {
+      "id": "NG-T006",
+      "title": "Signature transplantation via ambiguous serialisation",
+      "stride": [
+        "S",
+        "T"
+      ],
+      "elements": [
+        "TB-2"
+      ],
+      "attackers": [
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 1,
+        "f": 2
+      },
+      "likelihood": 2,
+      "severity": "medium",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:138",
+        "src/attestation.rs:123"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "SignatureTransplant",
+        "CrossModelConfusion"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Canonical length-prefixed encoding of the entire frame with a domain-separation tag, including manufacturer, model, sequence, and decoded_output."
+    },
+    {
+      "id": "NG-T010",
+      "title": "Decoded output is not covered by the signature",
+      "stride": [
+        "T"
+      ],
+      "elements": [
+        "TB-2",
+        "E3",
+        "E4"
+      ],
+      "attackers": [
+        "A2",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 4,
+      "severity": "critical",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:138",
+        "src/protocol.rs:115",
+        "src/protocol.rs:33"
+      ],
+      "simulated_by": [
+        "CommandModification"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Include decoded_output in signable_data() and compute_commitment(); make an off-device decoder an independent signing principal over (input commitment, output)."
+    },
+    {
+      "id": "NG-T011",
+      "title": "Signal tampering in transit",
+      "stride": [
+        "T"
+      ],
+      "elements": [
+        "TB-2"
+      ],
+      "attackers": [
+        "A2",
+        "A6"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "partial",
+      "code_refs": [
+        "src/protocol.rs:138"
+      ],
+      "simulated_by": [
+        "SignalInjection"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Depends on NG-T001; add AEAD so an active adversary cannot craft semantically plausible edits from observed plaintext."
+    },
+    {
+      "id": "NG-T012",
+      "title": "Firmware downgrade / rollback",
+      "stride": [
+        "T",
+        "E"
+      ],
+      "elements": [
+        "E2"
+      ],
+      "attackers": [
+        "A4",
+        "A3",
+        "A5"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 2,
+        "f": 3
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "partial",
+      "code_refs": [
+        "src/attestation.rs:123",
+        "src/attestation.rs:222"
+      ],
+      "simulated_by": [
+        "FirmwareDowngrade"
+      ],
+      "proposed_scenarios": [
+        "CrossModelConfusion"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Wire verify_firmware into verification; add a monotonic security version number with anti-rollback; support signed revocation of approved hashes."
+    },
+    {
+      "id": "NG-T013",
+      "title": "Decoder model poisoning and swap",
+      "stride": [
+        "T"
+      ],
+      "elements": [
+        "E4",
+        "E9"
+      ],
+      "attackers": [
+        "A4",
+        "A5"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 2,
+        "f": 4
+      },
+      "likelihood": 2,
+      "severity": "high",
+      "status": "partial",
+      "code_refs": [
+        "src/attestation.rs:143"
+      ],
+      "simulated_by": [
+        "MaliciousDecoder"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.3.0",
+      "mitigation": "Training-pipeline provenance, behavioural acceptance testing before approval, and runtime output plausibility monitoring (the only control that survives poisoning)."
+    },
+    {
+      "id": "NG-T014",
+      "title": "Calibration and transformation tampering",
+      "stride": [
+        "T"
+      ],
+      "elements": [
+        "E2",
+        "E4",
+        "E9"
+      ],
+      "attackers": [
+        "A5",
+        "A3"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 1,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "partial",
+      "code_refs": [
+        "src/provenance.rs:102",
+        "src/protocol.rs:21"
+      ],
+      "simulated_by": [
+        "TamperedCalibration"
+      ],
+      "proposed_scenarios": [
+        "ThresholdShift"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Verify transformation_hash against approved transforms; record the actual transform type instead of hardcoding Decoding; notify the user and retain rollback on calibration change."
+    },
+    {
+      "id": "NG-T015",
+      "title": "Provenance chain forking and replay insertion",
+      "stride": [
+        "T",
+        "R"
+      ],
+      "elements": [
+        "provenance"
+      ],
+      "attackers": [
+        "A2",
+        "A3"
+      ],
+      "impact": {
+        "s": 2,
+        "p": 0,
+        "f": 2
+      },
+      "likelihood": 3,
+      "severity": "medium",
+      "status": "open",
+      "code_refs": [
+        "src/provenance.rs:87",
+        "src/protocol.rs:121"
+      ],
+      "simulated_by": [
+        "ReplayAttack"
+      ],
+      "proposed_scenarios": [
+        "ChainFork",
+        "CommitmentCollision"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Require previous_commitment == tip; add a monotonic sequence number and per-frame nonce; reject duplicate commitments instead of overwriting the index."
+    },
+    {
+      "id": "NG-T016",
+      "title": "Stimulation parameter tampering",
+      "stride": [
+        "T",
+        "E"
+      ],
+      "elements": [
+        "E8",
+        "TB-5"
+      ],
+      "attackers": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "critical",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "StimulationOverdose",
+        "KindlingPattern"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Introduce a StimulationCommand type in physical units and a three-layer limiter (policy envelope, middleware dose accounting, hardware interlock) with signed, short-lived commands and a ramp-to-zero safe state."
+    },
+    {
+      "id": "NG-T017",
+      "title": "Closed-loop trigger threshold tampering",
+      "stride": [
+        "T"
+      ],
+      "elements": [
+        "E4",
+        "E9"
+      ],
+      "attackers": [
+        "A5",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 1,
+        "f": 3
+      },
+      "likelihood": 2,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "ThresholdShift"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Treat thresholds as approved, signed, audited clinical parameters with bounds; alert on any change and on dose-distribution shift."
+    },
+    {
+      "id": "NG-T018",
+      "title": "Timestamp manipulation and absent freshness check",
+      "stride": [
+        "T",
+        "S"
+      ],
+      "elements": [
+        "TB-2",
+        "E4"
+      ],
+      "attackers": [
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 3
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:142",
+        "src/attestation.rs:183"
+      ],
+      "simulated_by": [
+        "ReplayAttack"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Monotonic sequence number plus receiver-side acceptance window; challenge-response nonce for safety-critical outputs."
+    },
+    {
+      "id": "NG-T020",
+      "title": "Intent is not attributable",
+      "stride": [
+        "R"
+      ],
+      "elements": [
+        "TB-5",
+        "E4"
+      ],
+      "attackers": [
+        "A1",
+        "A2",
+        "A3",
+        "A5"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 2,
+        "f": 1
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "Sign outputs, persist a tamper-evident anchored log with decoder confidence and policy version, and bound retention so attestation outlives neural content."
+    },
+    {
+      "id": "NG-T021",
+      "title": "Provenance is volatile and unanchored",
+      "stride": [
+        "R",
+        "T"
+      ],
+      "elements": [
+        "provenance"
+      ],
+      "attackers": [
+        "A3"
+      ],
+      "impact": {
+        "s": 1,
+        "p": 0,
+        "f": 1
+      },
+      "likelihood": 4,
+      "severity": "medium",
+      "status": "open",
+      "code_refs": [
+        "src/provenance.rs:10"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "Append-only persistent log with per-link MAC, periodic external anchoring, and bounded memory via checkpoint compaction."
+    },
+    {
+      "id": "NG-T022",
+      "title": "Administrative and policy changes are unlogged",
+      "stride": [
+        "R"
+      ],
+      "elements": [
+        "E9",
+        "TB-6"
+      ],
+      "attackers": [
+        "A5"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 3,
+        "f": 2
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [
+        "src/policy.rs:146",
+        "src/policy.rs:234"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Every admin mutation becomes a signed logged event with actor, before/after value, and justification; content-address policy state."
+    },
+    {
+      "id": "NG-T030",
+      "title": "Raw neural exfiltration by an over-permissioned application",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "DF-5",
+        "TB-4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 4,
+        "f": 0
+      },
+      "likelihood": 5,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:30",
+        "src/policy.rs:40"
+      ],
+      "simulated_by": [
+        "DataExfiltration"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "Project frames per policy at the boundary: strip raw samples unless ReadRawSignal is held, with the projection attested in the provenance chain."
+    },
+    {
+      "id": "NG-T031",
+      "title": "Traffic-analysis side channel on frame size and cadence",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "TB-2"
+      ],
+      "attackers": [
+        "A2",
+        "A6"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 3,
+        "f": 0
+      },
+      "likelihood": 3,
+      "severity": "medium",
+      "status": "design",
+      "code_refs": [
+        "src/protocol.rs:30"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "TrafficAnalysis"
+      ],
+      "roadmap": "v0.3.0",
+      "mitigation": "Fixed-size padded frames and constant-rate transmission, selectable per deployment because of the implant energy cost."
+    },
+    {
+      "id": "NG-T032",
+      "title": "Verification errors leak policy and registry contents",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 2,
+        "f": 0
+      },
+      "likelihood": 5,
+      "severity": "medium",
+      "status": "open",
+      "code_refs": [
+        "src/attestation.rs:123",
+        "src/policy.rs:188",
+        "src/policy.rs:153"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "PolicyProbe"
+      ],
+      "roadmap": "v0.1.x",
+      "mitigation": "Two-tier errors: coarse denial across the trust boundary, detailed variant retained in the internal audit log."
+    },
+    {
+      "id": "NG-T033",
+      "title": "Timing side channels in verification and decode",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A1",
+        "A3"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 2,
+        "f": 0
+      },
+      "likelihood": 2,
+      "severity": "low",
+      "status": "open",
+      "code_refs": [
+        "src/attestation.rs:132",
+        "src/attestation.rs:149"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Constant-time comparison for secret values, non-short-circuiting policy evaluation, and constant-latency decode scheduling."
+    },
+    {
+      "id": "NG-T034",
+      "title": "Inference of protected attributes from permitted data",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "E5",
+        "E6"
+      ],
+      "attackers": [
+        "A1",
+        "A7"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 4,
+        "f": 0
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [
+        "DataExfiltration"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.3.0",
+      "mitigation": "Purpose limitation and retention as first-class policy dimensions plus transformation policies delivering the narrowest sufficient representation; residual is governance-bounded."
+    },
+    {
+      "id": "NG-T035",
+      "title": "Commitment hashes as a content-confirmation oracle",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "provenance"
+      ],
+      "attackers": [
+        "A7"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 3,
+        "f": 0
+      },
+      "likelihood": 2,
+      "severity": "medium",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:115"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "Keyed commitments (HMAC-SHA-256) or a per-frame random salt so commitments hide as well as bind."
+    },
+    {
+      "id": "NG-T036",
+      "title": "Unintended speech disclosure",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "E5",
+        "TB-5"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 1,
+        "p": 4,
+        "f": 1
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [
+        "src/protocol.rs:66"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.3.0",
+      "mitigation": "Explicit utterance gating, hold-and-confirm buffer above a sensitivity threshold, content policy before synthesis, and an unsend path."
+    },
+    {
+      "id": "NG-T037",
+      "title": "Plaintext telemetry",
+      "stride": [
+        "I"
+      ],
+      "elements": [
+        "TB-2"
+      ],
+      "attackers": [
+        "A2",
+        "A6"
+      ],
+      "impact": {
+        "s": 1,
+        "p": 4,
+        "f": 0
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:122",
+        "src/policy.rs:138"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "AEAD for all telemetry with forward secrecy and keys bound to attested identity; enforce require_encryption at admission."
+    },
+    {
+      "id": "NG-T040",
+      "title": "Feedback-loop DoS",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "TB-2",
+        "E4",
+        "TB-5"
+      ],
+      "attackers": [
+        "A2",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "critical",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "LatencyInjection",
+        "SelectiveDrop"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Declared latency budget per OutputType, deadline scheduling with staleness rejection, loop-health monitoring including controller output variance, graceful degradation ladder, watchdog with safe default."
+    },
+    {
+      "id": "NG-T041",
+      "title": "Frame flooding with no rate limiting",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "E3",
+        "E4"
+      ],
+      "attackers": [
+        "A1",
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 5,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:85",
+        "src/policy.rs:87"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "RateFlood"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Token-bucket enforcement of RateLimit at admission, ahead of signature verification."
+    },
+    {
+      "id": "NG-T042",
+      "title": "Unbounded memory growth",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "E3",
+        "provenance"
+      ],
+      "attackers": [
+        "A1",
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:119",
+        "src/provenance.rs:10"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "OversizedFrame"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Enforce max_signal_size before allocation at the deserialisation boundary; bound the chain with checkpoint compaction."
+    },
+    {
+      "id": "NG-T043",
+      "title": "Verification-cost amplification",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "E3",
+        "E4"
+      ],
+      "attackers": [
+        "A1",
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 3
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/protocol.rs:138",
+        "src/protocol.rs:115"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "RateFlood"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Cheap invariants first (size, sequence, known device, rate budget), signatures last; hash incrementally without the intermediate copy."
+    },
+    {
+      "id": "NG-T044",
+      "title": "Fail-secure/fail-safe conflict",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "TB-5"
+      ],
+      "attackers": [
+        "A1",
+        "A2",
+        "A3",
+        "A6"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 4,
+      "severity": "critical",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "LinkLoss"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Per-OutputType degraded-mode ladder authored with clinical input; never latch the last command; ramp rather than cut stimulation."
+    },
+    {
+      "id": "NG-T045",
+      "title": "Provenance-chain wedge (self-inflicted DoS)",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A2"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/provenance.rs:87",
+        "src/provenance.rs:137"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "SelectiveDrop"
+      ],
+      "roadmap": "v0.1.x",
+      "mitigation": "Sequence numbers with a bounded reorder/loss window, explicit Gap links preserving the evidence of loss, and signed checkpoint resynchronisation."
+    },
+    {
+      "id": "NG-T046",
+      "title": "Implant energy and thermal exhaustion",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "E2"
+      ],
+      "attackers": [
+        "A6"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 2,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.3.0",
+      "mitigation": "Duty-cycle limits, cheap-to-reject wake-up authentication before any signature check, per-peer energy budgeting, thermal throttling."
+    },
+    {
+      "id": "NG-T047",
+      "title": "RF interference and jamming",
+      "stride": [
+        "D"
+      ],
+      "elements": [
+        "TB-2"
+      ],
+      "attackers": [
+        "A6"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 0,
+        "f": 4
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "LinkLoss"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Out of scope to prevent; detect link loss, distinguish it from a quiet user, and enter the defined safe state."
+    },
+    {
+      "id": "NG-T050",
+      "title": "Policy engine has no enforcement point",
+      "stride": [
+        "E"
+      ],
+      "elements": [
+        "TB-4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 4,
+        "f": 2
+      },
+      "likelihood": 5,
+      "severity": "critical",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:151",
+        "src/policy.rs:175",
+        "src/policy.rs:208",
+        "src/attestation.rs:225"
+      ],
+      "simulated_by": [
+        "DataExfiltration"
+      ],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "A single mandatory SecurityGateway chokepoint returning either a policy-projected frame or a denial; no public API returns frame data without it."
+    },
+    {
+      "id": "NG-T051",
+      "title": "Raw-signal access via decoded side paths",
+      "stride": [
+        "E",
+        "I"
+      ],
+      "elements": [
+        "TB-4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 0,
+        "p": 4,
+        "f": 0
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "design",
+      "code_refs": [
+        "src/protocol.rs:75"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.x",
+      "mitigation": "Constrain rate and numeric precision per output type; treat full-rate full-precision output as a distinct, more privileged capability."
+    },
+    {
+      "id": "NG-T052",
+      "title": "Read-to-write escalation",
+      "stride": [
+        "E"
+      ],
+      "elements": [
+        "TB-5"
+      ],
+      "attackers": [
+        "A1",
+        "A3"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 0,
+        "f": 3
+      },
+      "likelihood": 3,
+      "severity": "critical",
+      "status": "design",
+      "code_refs": [
+        "src/policy.rs:58"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "StimulationOverdose"
+      ],
+      "roadmap": "v0.2.0",
+      "mitigation": "Split the capability lattice by consequence; stimulation requires separate, revocable, time-bounded grants plus a hardware limiter no software grant can exceed."
+    },
+    {
+      "id": "NG-T053",
+      "title": "Blacklist bypass on non-capability policy paths",
+      "stride": [
+        "E"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 3,
+        "f": 1
+      },
+      "likelihood": 4,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:153",
+        "src/policy.rs:175",
+        "src/policy.rs:208"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [
+        "BlacklistedAppFlow"
+      ],
+      "roadmap": "v0.1.0",
+      "mitigation": "Hoist the blacklist into a shared admissibility guard invoked by every policy entry point; test that every check_* denies a blacklisted app."
+    },
+    {
+      "id": "NG-T054",
+      "title": "Development policy reaching production",
+      "stride": [
+        "E"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A5",
+        "A1"
+      ],
+      "impact": {
+        "s": 3,
+        "p": 4,
+        "f": 1
+      },
+      "likelihood": 3,
+      "severity": "high",
+      "status": "open",
+      "code_refs": [
+        "src/policy.rs:239",
+        "src/policy.rs:140"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Gate dev policies behind a feature flag; make min_trust_level a TrustLevel and compare it; require an explicit production deployment mode."
+    },
+    {
+      "id": "NG-T055",
+      "title": "Verdict is advisory; failures return Ok",
+      "stride": [
+        "E"
+      ],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [
+        "A1"
+      ],
+      "impact": {
+        "s": 4,
+        "p": 3,
+        "f": 2
+      },
+      "likelihood": 4,
+      "severity": "critical",
+      "status": "open",
+      "code_refs": [
+        "src/attestation.rs:205",
+        "src/lib.rs:30"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.1.0",
+      "mitigation": "Return Result<TrustedFrame, RejectionReport> with frame accessors only on TrustedFrame, so misuse fails to compile."
+    },
+    {
+      "id": "NG-T056",
+      "title": "Verdict::Suspicious is unreachable",
+      "stride": [],
+      "elements": [
+        "E4"
+      ],
+      "attackers": [],
+      "impact": {
+        "s": 2,
+        "p": 0,
+        "f": 1
+      },
+      "likelihood": 4,
+      "severity": "low",
+      "status": "open",
+      "code_refs": [
+        "src/attestation.rs:233"
+      ],
+      "simulated_by": [],
+      "proposed_scenarios": [],
+      "roadmap": "v0.2.0",
+      "mitigation": "Make the middle verdict reachable from the plausibility gate and degraded-confidence conditions, gating high-consequence outputs only."
+    }
+  ]
+}
