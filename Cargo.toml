@@ -1,0 +1,52 @@
+[package]
+name = "neuroguard"
+version = "0.0.1"
+edition = "2021"
+authors = ["Charley Hoffman <charley.hoffm@gmail.com>"]
+license = "MIT OR Apache-2.0"
+description = "Security middleware and virtual testing framework for brain-computer interfaces"
+repository = "https://github.com/larchey/neuroguard"
+keywords = ["bci", "security", "neurotech", "attestation", "provenance"]
+categories = ["cryptography", "embedded", "simulation"]
+readme = "README.md"
+
+[dependencies]
+# Cryptography
+sha2 = "0.10"
+ed25519-dalek = "2.1"
+rand = "0.8"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.0"
+
+# Error handling
+thiserror = "2.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "virtual_bci"
+harness = false
+
+[lib]
+name = "neuroguard"
+path = "src/lib.rs"
+
+[[example]]
+name = "basic_bci"
+path = "examples/basic_bci.rs"
+
+[[example]]
+name = "attack_scenarios"
+path = "examples/attack_scenarios.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
