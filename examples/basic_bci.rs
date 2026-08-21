@@ -35,8 +35,11 @@ fn main() -> neuroguard::Result<()> {
     println!("\nRegistering device in trust registry...");
     let mut registry = DeviceRegistry::new();
 
+    // Enrolment: the registry learns the device's verifying key here, out of band. Frames do
+    // not carry it, so this is what makes a valid signature mean "this implant".
     let trusted_device = TrustedDevice {
         device_id: bci.device_id().clone(),
+        public_key: bci.public_key(),
         trust_level: TrustLevel::FullyTrusted,
         allowed_decoders: vec!["decoder-v1".to_string()],
     };
@@ -63,7 +66,7 @@ fn main() -> neuroguard::Result<()> {
         println!("  Decoded output: {:?}", frame.decoded_output);
 
         // Verify the frame
-        let report = verify_frame(&frame)?;
+        let report = verify_frame(&frame, &registry)?;
 
         println!("  Verification report:");
         println!("    Device authenticated: {}", report.device_authenticated);

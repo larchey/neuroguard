@@ -39,17 +39,18 @@
       },
       "likelihood": 4,
       "severity": "critical",
-      "status": "open",
+      "status": "closed",
       "code_refs": [
-        "src/attestation.rs:167",
-        "src/attestation.rs:168"
+        "src/attestation.rs:182",
+        "src/attestation.rs:183"
       ],
       "simulated_by": [
         "DeviceImpersonation"
       ],
       "proposed_scenarios": [],
       "roadmap": "v0.1.0",
-      "mitigation": "Resolve the verifying key from DeviceRegistry by device id; remove public_key from the wire format; bind identity to a hardware root of trust."
+      "mitigation": "Resolve the verifying key from DeviceRegistry by device id; remove public_key from the wire format; bind identity to a hardware root of trust.",
+      "resolution": "verify_signature() resolves the verifying key from DeviceRegistry by device id and public_key has been removed from the wire format entirely. The claimed manufacturer and model must also match the enrolment, closing the cross-model confusion path. Binding enrolment to a hardware root of trust remains future work."
     },
     {
       "id": "NG-T002",
@@ -77,7 +78,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/virtual_bci.rs:181"
+        "src/virtual_bci.rs:211"
       ],
       "simulated_by": [
         "SignalInjection"
@@ -142,8 +143,8 @@
       "severity": "critical",
       "status": "design",
       "code_refs": [
-        "src/attestation.rs:94",
-        "src/attestation.rs:100",
+        "src/attestation.rs:101",
+        "src/attestation.rs:107",
         "src/policy.rs:146"
       ],
       "simulated_by": [],
@@ -174,7 +175,7 @@
       "severity": "high",
       "status": "partial",
       "code_refs": [
-        "src/attestation.rs:143",
+        "src/attestation.rs:150",
         "src/protocol.rs:24"
       ],
       "simulated_by": [
@@ -207,7 +208,7 @@
       "status": "closed",
       "code_refs": [
         "src/protocol.rs:304",
-        "src/attestation.rs:123"
+        "src/attestation.rs:130"
       ],
       "simulated_by": [],
       "proposed_scenarios": [
@@ -309,8 +310,8 @@
       "severity": "high",
       "status": "partial",
       "code_refs": [
-        "src/attestation.rs:123",
-        "src/attestation.rs:222"
+        "src/attestation.rs:130",
+        "src/attestation.rs:253"
       ],
       "simulated_by": [
         "FirmwareDowngrade"
@@ -344,7 +345,7 @@
       "severity": "high",
       "status": "partial",
       "code_refs": [
-        "src/attestation.rs:143"
+        "src/attestation.rs:150"
       ],
       "simulated_by": [
         "MaliciousDecoder"
@@ -512,7 +513,7 @@
       "status": "open",
       "code_refs": [
         "src/protocol.rs:274",
-        "src/attestation.rs:183"
+        "src/attestation.rs:211"
       ],
       "simulated_by": [
         "ReplayAttack"
@@ -694,7 +695,7 @@
       "severity": "medium",
       "status": "open",
       "code_refs": [
-        "src/attestation.rs:123",
+        "src/attestation.rs:130",
         "src/policy.rs:188",
         "src/policy.rs:153"
       ],
@@ -727,8 +728,8 @@
       "severity": "low",
       "status": "open",
       "code_refs": [
-        "src/attestation.rs:132",
-        "src/attestation.rs:149"
+        "src/attestation.rs:139",
+        "src/attestation.rs:156"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -1123,7 +1124,7 @@
         "src/policy.rs:151",
         "src/policy.rs:175",
         "src/policy.rs:208",
-        "src/attestation.rs:225"
+        "src/attestation.rs:256"
       ],
       "simulated_by": [
         "DataExfiltration"
@@ -1154,7 +1155,7 @@
       "severity": "high",
       "status": "design",
       "code_refs": [
-        "src/protocol.rs:102"
+        "src/protocol.rs:99"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -1275,8 +1276,8 @@
       "severity": "critical",
       "status": "open",
       "code_refs": [
-        "src/attestation.rs:205",
-        "src/lib.rs:31"
+        "src/attestation.rs:236",
+        "src/lib.rs:34"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],
@@ -1300,7 +1301,7 @@
       "severity": "low",
       "status": "open",
       "code_refs": [
-        "src/attestation.rs:233"
+        "src/attestation.rs:264"
       ],
       "simulated_by": [],
       "proposed_scenarios": [],

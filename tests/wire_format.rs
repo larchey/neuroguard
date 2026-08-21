@@ -14,20 +14,36 @@
 
 use chrono::{TimeZone, Utc};
 use ed25519_dalek::{Signer, SigningKey};
-use neuroguard::attestation::verify_signature;
+use neuroguard::attestation::{verify_signature, DeviceRegistry, TrustLevel, TrustedDevice};
 use neuroguard::protocol::{DecodedOutput, DeviceId, NeuralFrame};
+
+fn test_device_id() -> DeviceId {
+    DeviceId {
+        id: "wire-test-device".to_string(),
+        manufacturer: "TestCo".to_string(),
+        model: "Implant-V1".to_string(),
+    }
+}
+
+/// A registry holding the enrolled key for the frames `signed_frame` produces.
+fn registry() -> DeviceRegistry {
+    let signing_key = SigningKey::from_bytes(&[7u8; 32]);
+    let mut registry = DeviceRegistry::new();
+    registry.register_device(TrustedDevice {
+        device_id: test_device_id(),
+        public_key: signing_key.verifying_key().to_bytes(),
+        trust_level: TrustLevel::FullyTrusted,
+        allowed_decoders: vec!["decoder-v1".to_string()],
+    });
+    registry
+}
 
 /// A frame with a fixed timestamp and a real signature over its own contents.
 fn signed_frame(decoded_output: DecodedOutput, signal_data: Vec<f32>) -> NeuralFrame {
     let signing_key = SigningKey::from_bytes(&[7u8; 32]);
 
     let mut frame = NeuralFrame {
-        device_id: DeviceId {
-            id: "wire-test-device".to_string(),
-            manufacturer: "TestCo".to_string(),
-            model: "Implant-V1".to_string(),
-            public_key: signing_key.verifying_key().to_bytes(),
-        },
+        device_id: test_device_id(),
         firmware_hash: [0x11; 32],
         timestamp: Utc.timestamp_opt(1_700_000_000, 0).unwrap(),
         transformation_hash: [0x22; 32],
@@ -107,8 +123,9 @@ fn signature_still_verifies_after_a_round_trip() {
         vec![1.0, 2.0, 3.0],
     );
 
-    verify_signature(&original).expect("freshly signed frame must verify");
-    verify_signature(&round_trip(&original)).expect("round-tripped frame must still verify");
+    verify_signature(&original, &registry()).expect("freshly signed frame must verify");
+    verify_signature(&round_trip(&original), &registry())
+        .expect("round-tripped frame must still verify");
 }
 
 #[test]
@@ -141,7 +158,8 @@ fn all_decoded_output_variants_round_trip() {
             decoded.signable_data(),
             "{label}: preimage changed across round trip"
         );
-        verify_signature(&decoded).unwrap_or_else(|e| panic!("{label}: failed to verify: {e}"));
+        verify_signature(&decoded, &registry())
+            .unwrap_or_else(|e| panic!("{label}: failed to verify: {e}"));
     }
 }
 
@@ -189,7 +207,7 @@ fn f32_signal_samples_survive_exactly() {
             "sample {i} ({before}) changed bit pattern across serialization"
         );
     }
-    verify_signature(&decoded).expect("frame with awkward samples must still verify");
+    verify_signature(&decoded, &registry()).expect("frame with awkward samples must still verify");
 }
 
 #[test]
@@ -244,7 +262,7 @@ fn an_empty_signal_frame_round_trips() {
     let decoded = round_trip(&frame);
 
     assert!(decoded.signal_data.is_empty());
-    verify_signature(&decoded).expect("empty-signal frame must verify");
+    verify_signature(&decoded, &registry()).expect("empty-signal frame must verify");
 }
 
 #[test]
@@ -260,5 +278,5 @@ fn a_genesis_frame_round_trips_with_no_previous_commitment() {
         decoded.previous_commitment.is_none(),
         "Option<[u8; 32]> must round trip as None, not as a zero array"
     );
-    verify_signature(&decoded).expect("genesis frame must verify");
+    verify_signature(&decoded, &registry()).expect("genesis frame must verify");
 }

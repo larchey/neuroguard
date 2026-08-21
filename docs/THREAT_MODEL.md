@@ -15,27 +15,34 @@ NeuroGuard's v0.0.1 architecture defines the right primitives (device attestatio
 hash approval, provenance chaining, capability policy) but the *verification pipeline that binds
 them together does not yet exist*. Running the shipped attack suite:
 
+At v0.0.1, as originally assessed, the shipped attack suite detected **0 of 8** modelled attacks —
+every scenario returned `Trusted`. That was expected for a prototype, but it meant the README's
+"Verification Flow" (six ✓ checks) described an intended design rather than the implemented one.
+This document is the design that closes that gap.
+
+As of the current tree, **1 of 8** is detected:
+
 ```
 $ cargo run --example attack_scenarios
 Testing attack: ReplayAttack ............ Verdict: Trusted   ⚠️  Attack bypassed verification!
 Testing attack: SignalInjection ......... Verdict: Trusted   ⚠️  Attack bypassed verification!
 Testing attack: MaliciousDecoder ........ Verdict: Trusted   ⚠️  Attack bypassed verification!
 Testing attack: FirmwareDowngrade ....... Verdict: Trusted   ⚠️  Attack bypassed verification!
-Testing attack: DeviceImpersonation ..... Verdict: Trusted   ⚠️  Attack bypassed verification!
+Testing attack: DeviceImpersonation ..... device not registered  ✓ Attack DETECTED
 Testing attack: TamperedCalibration ..... Verdict: Trusted   ⚠️  Attack bypassed verification!
 Testing attack: CommandModification ..... Verdict: Trusted   ⚠️  Attack bypassed verification!
 Testing attack: DataExfiltration ........ Verdict: Trusted   ⚠️  Attack bypassed verification!
+
+Frames rejected: 3 of 24
 ```
 
-**0 of 8 modelled attacks are currently detected.** That is expected for a v0.0.1 prototype, but it
-means the README's "Verification Flow" (six ✓ checks) describes an intended design, not the
-implemented one. This document is the design that closes that gap.
-
-That figure is a weaker signal than it looks, and it will not move until the simulator itself is
-fixed. `VirtualBCI::apply_attack` mutates the frame *before* signing it, so every attack frame is
-validly self-signed by the device — the suite models a compromised device and cannot express an
-on-path attacker at all. Closing NG-T010 therefore left the count at 0/8 even though tampering in
-transit is now detected: no scenario performs tampering in transit. See
+This figure is a weaker signal than it looks, and most of it will not move until the simulator
+itself is fixed. `VirtualBCI::apply_attack` mutates the frame *before* signing it, so every attack
+frame is validly self-signed by the enrolled device — the suite models a compromised device and
+cannot express an on-path attacker at all. Closing NG-T010 therefore changed nothing here even
+though tampering in transit is now detected, because no scenario performs tampering in transit.
+`DeviceImpersonation` moved only because it alters the device *id*, which registry-bound key
+resolution (NG-T001) now rejects before any signature is checked. See
 [§8](#8-validation-tests-simulation-and-fuzzing).
 
 The five highest-severity findings as first assessed:
@@ -43,7 +50,7 @@ The five highest-severity findings as first assessed:
 | ID | Finding | Why it matters |
 |---|---|---|
 | [NG-T010](#ng-t010) `CLOSED` | `NeuralFrame::signable_data()` did not cover `decoded_output` | The *command* — cursor, prosthetic joint angles, vehicle throttle — was unauthenticated. Anyone on the path could rewrite the intent while the signature still verified. Highest safety impact in the model. Now covered by a canonical, length-prefixed, domain-separated preimage. |
-| [NG-T001](#ng-t001) | Signature is checked against the public key carried *inside the frame* | Self-signed frames verify. There is no binding to a registry, so "device authenticated" means "the sender owns a key", not "the sender is your implant". |
+| [NG-T001](#ng-t001) `CLOSED` | Signature was checked against the public key carried *inside the frame* | Self-signed frames verified. There was no binding to a registry, so "device authenticated" meant "the sender owns a key", not "the sender is your implant". Keys are now resolved from the registry by device id and no longer travel on the wire. |
 | [NG-T016](#ng-t016) | No stimulation (write-path) type exists at all | `DecodedOutput` models brain→app only. Closed-loop DBS/sensory feedback — where tampering causes direct physical harm — is outside the protocol's expressive range. |
 | [NG-T040](#ng-t040) | No latency/liveness contract on the closed loop | Selective delay/drop of frames in a closed-loop controller is a *safety* attack (oscillation, runaway prosthetic), not just an availability one. Rate limits are declared in `RateLimit` but never enforced anywhere. |
 | [NG-T050](#ng-t050) | `PolicyEngine` has no enforcement point | `check_capability`/`check_channel_access`/`check_output_type` are never called by `verify_frame` or any pipeline. Policy is advisory; every app effectively holds every capability. |
@@ -265,13 +272,24 @@ than deleted so the record of what was wrong survives.
 ### 4.1 Spoofing
 
 #### <a id="ng-t001"></a>NG-T001 — Implant impersonation via self-asserted public key
-**S** · E2/TB-2 · A2, A3 · S4 P3 F3 · L4 → **Critical** · `OPEN`
+**S** · E2/TB-2 · A2, A3 · S4 P3 F3 · L4 → **Critical** · `CLOSED`
 
-`verify_signature` (`src/attestation.rs:167`) loads the verifying key from
-`frame.device_id.public_key` — a field the frame itself carries. Any party able to construct a frame
-generates a keypair, signs, and passes authentication. `DeviceRegistry` exists
-(`src/attestation.rs:51`) but `verify_neural_frame` never consults it, which is why the
-`DeviceImpersonation` scenario returns `Trusted`.
+> **Resolved.** `verify_signature` now takes a `&DeviceRegistry` and resolves the verifying key by
+> `device_id.id`; `public_key` has been removed from the wire format altogether, so the frame no
+> longer carries a key to be believed. The claimed `manufacturer` and `model` must equal the
+> enrolled values, so a device cannot steer `verify_firmware` at another family's approved-hash
+> list. Regression tests: `ng_t001_self_signed_frames_are_rejected` and
+> `ng_t001_impersonating_an_enrolled_id_is_rejected`.
+>
+> **Residual:** enrolment itself is unauthenticated — `register_device` accepts any caller's
+> assertion, so trust bottoms out in whoever populates the registry rather than in a hardware root
+> of trust. Tracked under [NG-T004](#ng-t004). The text below records the v0.0.1 defect.
+
+`verify_signature` (`src/attestation.rs:182`) loaded the verifying key from
+`frame.device_id.public_key` — a field the frame itself carried. Any party able to construct a frame
+could generate a keypair, sign, and pass authentication. `DeviceRegistry` existed
+(`src/attestation.rs:51`) but `verify_neural_frame` never consulted it, which is why the
+`DeviceImpersonation` scenario returned `Trusted`.
 
 *Mitigation:* verification must take the registry as an input and resolve the key by `device_id.id`,
 rejecting frames whose embedded key does not equal the registered one; the embedded key field should
@@ -282,7 +300,7 @@ keypair generated in secure element, key never leaves the implant).
 #### <a id="ng-t002"></a>NG-T002 — Neural signal spoofing at or below the signing boundary
 **S/T** · E1, E2/TB-1 · A4, A6, A3-on-implant · S4 P0 F4 · L2 → **High** · `DESIGN`
 
-Signing happens *after* acquisition (`src/virtual_bci.rs:181`). Anything that corrupts the signal
+Signing happens *after* acquisition (`src/virtual_bci.rs:211`). Anything that corrupts the signal
 before that point — induced currents on the electrode leads, a firmware implant, a compromised DSP
 stage — yields a cryptographically perfect frame containing fabricated intent. Cryptography cannot
 reach below TB-1; only signal-domain plausibility can. See [§5.1](#51-neural-signal-spoofing).
@@ -341,7 +359,7 @@ separator. Distinct frames can therefore serialise to identical byte strings —
 byte between the tail of `id` and the head of `firmware_hash` — so a signature valid for one
 (device, firmware) pair can be valid for another. `manufacturer` and `model` are omitted from the
 signed data entirely while `verify_firmware` keys its approved-hash lookup on `model`
-(`src/attestation.rs:123`), giving a cross-model confusion attack: flip `model` to a device family
+(`src/attestation.rs:130`), giving a cross-model confusion attack: flip `model` to a device family
 whose approved list contains the attacker's firmware hash, and the signature still verifies.
 
 *Mitigation:* sign a canonical, length-prefixed encoding of the *entire* frame with a domain
@@ -389,9 +407,9 @@ plausible because it can read the plaintext it is modifying.
 #### <a id="ng-t012"></a>NG-T012 — Firmware downgrade / rollback
 **T/E** · E2 · A4, A3, A5 · S4 P2 F3 · L3 → **High** · `PARTIAL`
 
-`verify_firmware` (`src/attestation.rs:123`) is implemented but unreachable from
+`verify_firmware` (`src/attestation.rs:130`) is implemented but unreachable from
 `verify_neural_frame`, which sets `report.firmware_trusted = true` unconditionally
-(`src/attestation.rs:222`). Approved-hash lists are also append-only with no revocation and no
+(`src/attestation.rs:253`). Approved-hash lists are also append-only with no revocation and no
 monotonic version, so a *previously approved but now vulnerable* image stays valid forever — the
 classic rollback gap. `FirmwareDowngrade` returns `Trusted` today.
 
@@ -565,7 +583,7 @@ a build/deployment setting, verbose in the dev SDK, terse in production.
 **I** · E4 · A1, A3 · S0 P2 F0 · L2 → **Low** · `OPEN`
 
 `verify_firmware`/`verify_model` use linear `Vec::contains` over approved hashes
-(`src/attestation.rs:132`, `src/attestation.rs:149`), and the policy path short-circuits on the first
+(`src/attestation.rs:139`, `src/attestation.rs:156`), and the policy path short-circuits on the first
 failing check. The approved hashes are not secrets, so the classic key-recovery framing does not
 apply, but *ordering and membership* leak, and — more interestingly for BCI — decode latency
 correlates with signal properties, which is a channel into the neural content itself.
@@ -722,7 +740,7 @@ possible failure.
 from `verify_neural_frame`, `verify_frame`, the examples, or any pipeline code — the crate has no
 call site that connects a frame to a policy decision. Meanwhile
 `verify_neural_frame` sets `report.application_authorized = true` unconditionally
-(`src/attestation.rs:225`). Every capability is effectively held by everyone.
+(`src/attestation.rs:256`). Every capability is effectively held by everyone.
 
 *Mitigation:* a single mandatory chokepoint — a `SecurityGateway` that takes (frame, app identity,
 registry, policy, rate state) and returns either a policy-projected frame or a denial. No public API

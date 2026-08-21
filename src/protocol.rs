@@ -60,9 +60,6 @@ pub struct DeviceId {
 
     /// Device model
     pub model: String,
-
-    /// Device public key (Ed25519)
-    pub public_key: [u8; 32],
 }
 
 /// Decoded neural output
@@ -263,9 +260,9 @@ impl DecodedOutput {
 impl NeuralFrame {
     /// Write every authenticated field of the frame in a fixed order.
     ///
-    /// `device_id.public_key` is deliberately absent: it is self-asserted (NG-T001), so binding
-    /// it would not establish identity — an attacker who re-signs also swaps the key. It leaves
-    /// the wire format entirely once keys are resolved from the registry.
+    /// The verifying key is not among them: it is no longer carried on the wire at all, but held
+    /// by the registry and looked up by device id (NG-T001). Signing a key the sender chose would
+    /// prove nothing, since an attacker who re-signs also swaps the key.
     fn write_body(&self, writer: &mut CanonicalWriter) {
         writer.field(self.device_id.id.as_bytes());
         writer.field(self.device_id.manufacturer.as_bytes());
@@ -319,7 +316,6 @@ mod tests {
                 id: "test-device".to_string(),
                 manufacturer: "TestCo".to_string(),
                 model: "V1".to_string(),
-                public_key: [0u8; 32],
             },
             firmware_hash: [1u8; 32],
             timestamp: Utc::now(),

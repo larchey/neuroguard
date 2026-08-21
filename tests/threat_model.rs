@@ -13,7 +13,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
 
-use neuroguard::attestation::{verify_neural_frame, verify_signature, Verdict};
+use neuroguard::attestation::{
+    verify_neural_frame, verify_signature, DeviceRegistry, TrustLevel, Verdict,
+};
 use neuroguard::policy::{Capability, PolicyEngine};
 use neuroguard::protocol::DecodedOutput;
 use neuroguard::provenance::ProvenanceChain;
@@ -267,14 +269,22 @@ fn device(name: &str) -> VirtualBCI {
     )
 }
 
+/// A device together with a registry that has enrolled it: the ordinary, non-adversarial setup.
+fn enrolled(name: &str) -> (VirtualBCI, DeviceRegistry) {
+    let bci = device(name);
+    let mut registry = DeviceRegistry::new();
+    registry.register_device(bci.enrol(TrustLevel::FullyTrusted, vec!["decoder-v1".to_string()]));
+    (bci, registry)
+}
+
 /// NG-T010 (CLOSED): `signable_data()` covers `decoded_output`, so rewriting the command in
 /// flight invalidates the device signature.
 #[test]
 fn ng_t010_decoded_output_is_covered_by_the_signature() {
-    let mut bci = device("t010");
+    let (mut bci, registry) = enrolled("t010");
     let mut frame = bci.generate_frame().unwrap();
     assert!(
-        verify_signature(&frame).is_ok(),
+        verify_signature(&frame, &registry).is_ok(),
         "baseline frame must verify"
     );
 
@@ -284,11 +294,11 @@ fn ng_t010_decoded_output_is_covered_by_the_signature() {
     };
 
     assert!(
-        verify_signature(&frame).is_err(),
+        verify_signature(&frame, &registry).is_err(),
         "NG-T010 REGRESSED: a rewritten command must break the signature"
     );
     assert_eq!(
-        verify_neural_frame(&frame).unwrap().verdict,
+        verify_neural_frame(&frame, &registry).unwrap().verdict,
         Verdict::Rejected,
         "NG-T010 REGRESSED: a tampered command must not be trusted end to end"
     );
@@ -354,27 +364,49 @@ fn ng_t006_signature_and_commitment_are_domain_separated() {
     );
 }
 
-/// NG-T001: the verifying key is read from the frame, so an unregistered device that signs with a
-/// freshly generated key authenticates successfully.
+/// NG-T001 (CLOSED): the verifying key comes from the registry, so a device that signs with a
+/// freshly generated key does not authenticate however well-formed its frame is.
 #[test]
-fn ng_t001_self_signed_frames_authenticate() {
+fn ng_t001_self_signed_frames_are_rejected() {
+    let (_genuine, registry) = enrolled("your-implant");
+
     let mut impostor = device("definitely-not-your-implant");
     let frame = impostor.generate_frame().unwrap();
 
-    let report = verify_neural_frame(&frame).unwrap();
+    let report = verify_neural_frame(&frame, &registry).unwrap();
     assert!(
-        report.device_authenticated,
-        "NG-T001 FIXED: keys are now registry-bound — update the catalogue and this test"
+        !report.device_authenticated,
+        "NG-T001 REGRESSED: an unenrolled device authenticated"
     );
-    assert_eq!(report.verdict, Verdict::Trusted);
+    assert_eq!(report.verdict, Verdict::Rejected);
+}
+
+/// NG-T001 (CLOSED, second half): claiming an enrolled device's id is not enough — the signature
+/// must be made by the key enrolled *for that id*.
+#[test]
+fn ng_t001_impersonating_an_enrolled_id_is_rejected() {
+    let (_genuine, registry) = enrolled("your-implant");
+
+    // A different device with a different key, claiming the enrolled identity.
+    let mut impostor = device("your-implant");
+    let frame = impostor.generate_frame().unwrap();
+    assert_eq!(
+        frame.device_id.id, "your-implant",
+        "impostor should claim the enrolled id"
+    );
+
+    assert!(
+        verify_signature(&frame, &registry).is_err(),
+        "NG-T001 REGRESSED: a foreign key signed for an enrolled id"
+    );
 }
 
 /// NG-T012 / NG-T005 / NG-T050: registry and policy results are hardcoded in the report.
 #[test]
 fn ng_t012_registry_checks_are_hardcoded_true() {
-    let mut bci = device("t012");
+    let (mut bci, registry) = enrolled("t012");
     let frame = bci.generate_frame().unwrap();
-    let report = verify_neural_frame(&frame).unwrap();
+    let report = verify_neural_frame(&frame, &registry).unwrap();
 
     assert!(report.firmware_trusted, "NG-T012: not actually checked");
     assert!(report.decoder_approved, "NG-T005: not actually checked");
@@ -388,14 +420,15 @@ fn ng_t012_registry_checks_are_hardcoded_true() {
 /// NG-T018: nothing examines `timestamp`, so a ten-minute-old frame is accepted.
 #[test]
 fn ng_t018_stale_frames_are_accepted() {
-    let mut simulator = AttackSimulator::new(device("t018"));
+    let (bci, registry) = enrolled("t018");
+    let mut simulator = AttackSimulator::new(bci);
     let frames = simulator.run_attack(AttackType::ReplayAttack, 1).unwrap();
     let frame = &frames[0];
 
     let age = chrono::Utc::now() - frame.timestamp;
     assert!(age.num_minutes() >= 9, "scenario should backdate the frame");
     assert_eq!(
-        verify_neural_frame(frame).unwrap().verdict,
+        verify_neural_frame(frame, &registry).unwrap().verdict,
         Verdict::Trusted,
         "NG-T018 FIXED: freshness is now enforced — update the catalogue and this test"
     );
@@ -405,7 +438,8 @@ fn ng_t018_stale_frames_are_accepted() {
 /// 999.9 rail) passes verification, because no signal-domain check exists.
 #[test]
 fn ng_t002_implausible_signals_are_accepted() {
-    let mut simulator = AttackSimulator::new(device("t002"));
+    let (bci, registry) = enrolled("t002");
+    let mut simulator = AttackSimulator::new(bci);
     let frames = simulator
         .run_attack(AttackType::SignalInjection, 1)
         .unwrap();
@@ -416,7 +450,7 @@ fn ng_t002_implausible_signals_are_accepted() {
         "scenario should rail the signal"
     );
     assert_eq!(
-        verify_neural_frame(frame).unwrap().verdict,
+        verify_neural_frame(frame, &registry).unwrap().verdict,
         Verdict::Trusted,
         "NG-T002 FIXED: a plausibility gate now exists — update the catalogue and this test"
     );
@@ -475,11 +509,11 @@ fn ng_t053_blacklisted_app_still_passes_output_checks() {
 /// reads as success at the call site.
 #[test]
 fn ng_t055_rejected_frames_still_return_ok() {
-    let mut bci = device("t055");
+    let (mut bci, registry) = enrolled("t055");
     let mut frame = bci.generate_frame().unwrap();
     frame.signature = [0u8; 64]; // definitively invalid
 
-    let outcome = neuroguard::verify_frame(&frame);
+    let outcome = neuroguard::verify_frame(&frame, &registry);
     assert!(
         outcome.is_ok(),
         "NG-T055 FIXED: verification failure is now an Err — update the catalogue and this test"

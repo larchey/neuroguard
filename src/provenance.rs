@@ -230,7 +230,6 @@ mod tests {
             id: "device-001".to_string(),
             manufacturer: "NeuroCo".to_string(),
             model: "V1".to_string(),
-            public_key: [0u8; 32],
         };
 
         // Genesis frame

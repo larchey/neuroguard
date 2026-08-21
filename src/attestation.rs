@@ -60,6 +60,13 @@ pub struct TrustedDevice {
     /// Device ID
     pub device_id: DeviceId,
 
+    /// Ed25519 verifying key, established out of band at enrolment.
+    ///
+    /// This is the root of device authentication. Holding it here rather than reading it from
+    /// the frame is what makes a valid signature mean "this is your implant" instead of merely
+    /// "the sender owns a key".
+    pub public_key: [u8; 32],
+
     /// Trust level
     pub trust_level: TrustLevel,
 
@@ -163,9 +170,26 @@ impl Default for DeviceRegistry {
     }
 }
 
-/// Verify a neural frame's signature
-pub fn verify_signature(frame: &NeuralFrame) -> Result<()> {
-    let public_key = VerifyingKey::from_bytes(&frame.device_id.public_key)
+/// Verify a neural frame's signature against the key the registry holds for the claimed device.
+///
+/// The device id in the frame selects *which* enrolled key to check against; it does not supply
+/// the key. A frame claiming an unregistered id is rejected outright, and a frame claiming a
+/// registered id must carry a signature made by that device's enrolled key.
+///
+/// The rest of the claimed identity — manufacturer and model — must also match what was
+/// enrolled. Both are authenticated by the signature, but a device signing a false model would
+/// otherwise steer `verify_firmware` at a different approved-hash list.
+pub fn verify_signature(frame: &NeuralFrame, registry: &DeviceRegistry) -> Result<()> {
+    let device = registry.verify_device(&frame.device_id.id)?;
+
+    if frame.device_id != device.device_id {
+        return Err(Error::AttestationFailed(format!(
+            "device {} presented an identity that does not match its registration",
+            frame.device_id.id
+        )));
+    }
+
+    let public_key = VerifyingKey::from_bytes(&device.public_key)
         .map_err(|e| Error::CryptoError(e.to_string()))?;
 
     let signature = Signature::from_bytes(&frame.signature);
@@ -179,8 +203,15 @@ pub fn verify_signature(frame: &NeuralFrame) -> Result<()> {
     Ok(())
 }
 
-/// Verify a complete neural frame
-pub fn verify_neural_frame(frame: &NeuralFrame) -> Result<VerificationReport> {
+/// Verify a complete neural frame against a device registry.
+///
+/// The registry parameter is what makes the pipeline able to consult trust state at all; without
+/// it the firmware, model, and trust-level checks had nothing to check against and were hardcoded
+/// to pass.
+pub fn verify_neural_frame(
+    frame: &NeuralFrame,
+    registry: &DeviceRegistry,
+) -> Result<VerificationReport> {
     let mut report = VerificationReport {
         device_authenticated: false,
         firmware_trusted: false,
@@ -193,7 +224,7 @@ pub fn verify_neural_frame(frame: &NeuralFrame) -> Result<VerificationReport> {
     };
 
     // 1. Verify device signature
-    match verify_signature(frame) {
+    match verify_signature(frame, registry) {
         Ok(()) => {
             report.device_authenticated = true;
             report.details.push("✓ Device signature valid".to_string());
@@ -257,11 +288,11 @@ mod tests {
             id: "device-001".to_string(),
             manufacturer: "NeuroCo".to_string(),
             model: "Implant-V1".to_string(),
-            public_key: [0u8; 32],
         };
 
         let trusted_device = TrustedDevice {
             device_id: device_id.clone(),
+            public_key: [0u8; 32],
             trust_level: TrustLevel::FullyTrusted,
             allowed_decoders: vec!["decoder-A".to_string()],
         };

@@ -21,6 +21,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Verify a complete neural frame through the security pipeline
 ///
+/// The registry supplies the device's enrolled verifying key and its approved firmware and model
+/// hashes; verification is meaningless without it.
+///
 /// # Security Properties
 /// - Device authentication
 /// - Firmware integrity
@@ -28,6 +31,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 /// - Model hash validation
 /// - Signal provenance
 /// - Application authorization
-pub fn verify_frame(frame: &protocol::NeuralFrame) -> Result<attestation::VerificationReport> {
-    attestation::verify_neural_frame(frame)
+pub fn verify_frame(
+    frame: &protocol::NeuralFrame,
+    registry: &attestation::DeviceRegistry,
+) -> Result<attestation::VerificationReport> {
+    attestation::verify_neural_frame(frame, registry)
 }

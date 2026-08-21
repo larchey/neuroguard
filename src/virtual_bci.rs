@@ -1,5 +1,6 @@
 //! Virtual BCI device simulator for security testing
 
+use crate::attestation::{TrustLevel, TrustedDevice};
 use crate::error::Result;
 use crate::protocol::{ChannelType, DecodedOutput, DeviceId, NeuralChannel, NeuralFrame};
 use chrono::Utc;
@@ -87,13 +88,11 @@ impl VirtualBCI {
         }
 
         let signing_key = SigningKey::from_bytes(&secret_bytes);
-        let public_key: [u8; 32] = signing_key.verifying_key().to_bytes();
 
         let device_id = DeviceId {
             id: device_id,
             manufacturer,
             model,
-            public_key,
         };
 
         // Generate default hashes
@@ -137,6 +136,24 @@ impl VirtualBCI {
     /// Get device ID
     pub fn device_id(&self) -> &DeviceId {
         &self.device_id
+    }
+
+    /// The device's Ed25519 verifying key.
+    ///
+    /// A real deployment learns this at enrolment, through a channel that establishes the key
+    /// belongs to this physical implant. The simulator hands it over directly.
+    pub fn public_key(&self) -> [u8; 32] {
+        self.signing_key.verifying_key().to_bytes()
+    }
+
+    /// Build the registry entry a real enrolment step would produce.
+    pub fn enrol(&self, trust_level: TrustLevel, allowed_decoders: Vec<String>) -> TrustedDevice {
+        TrustedDevice {
+            device_id: self.device_id.clone(),
+            public_key: self.public_key(),
+            trust_level,
+            allowed_decoders,
+        }
     }
 
     /// Get available channels
